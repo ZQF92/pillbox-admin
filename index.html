@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能药盒远程管家</title>
+    <!-- 引入 MQTT.js 库 -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root { --primary-color: #007AFF; --bg-color: #F2F2F7; }
+        body { font-family: -apple-system, system-ui, sans-serif; background-color: var(--bg-color); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .app-container { width: 90%; max-width: 400px; background: white; border-radius: 20px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 25px; }
+        .header h1 { font-size: 22px; color: #1C1C1E; margin: 0; }
+        .status-tag { display: inline-block; padding: 4px 12px; border-radius: 50px; font-size: 12px; margin-top: 8px; font-weight: 600; }
+        .online { background: #E2F9E1; color: #28CD41; }
+        .offline { background: #FFE5E5; color: #FF3B30; }
+        .input-group { margin-bottom: 20px; }
+        label { display: block; font-size: 14px; color: #8E8E93; margin-bottom: 8px; }
+        input { width: 100%; padding: 12px; border: 1px solid #D1D1D6; border-radius: 10px; font-size: 16px; box-sizing: border-box; outline: none; }
+        input:focus { border-color: var(--primary-color); }
+        button { width: 100%; padding: 15px; background: var(--primary-color); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,122,255,0.3); }
+        button:active { transform: scale(0.98); opacity: 0.9; }
+        .footer { text-align: center; font-size: 12px; color: #AEAEB2; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <h1>💊 孝心药盒远程端</h1>
+        <div id="status" class="status-tag offline">云端连接中...</div>
+    </div>
+
+    <div class="input-group">
+        <label>⏰ 设置服药时间</label>
+        <input type="time" id="timeInput" value="08:30">
+    </div>
+
+    <div class="input-group">
+        <label>📝 用药说明 (语音播报词)</label>
+        <input type="text" id="msgInput" placeholder="例如：感冒灵两粒，温水送服">
+    </div>
+
+    <button onclick="sendData()">同步到药盒</button>
+
+    <div class="footer">
+        基于 MQTT Over WebSocket 技术<br>
+        服务器: broker.emqx.io
+    </div>
+</div>
+
+<script>
+    // --- 配置信息 ---
+    // 使用 WSS (WebSocket Secure) 协议连接 EMQX 公共服务器
+    const broker = 'wss://broker.emqx.io:8084/mqtt';
+    const topic = 'medbox/S3/config';
+
+    const client = mqtt.connect(broker, {
+        clientId: 'Web_Admin_' + Math.random().toString(16).substring(2, 8)
+    });
+
+    const statusDiv = document.getElementById('status');
+
+    client.on('connect', () => {
+        statusDiv.innerText = '● 云端已连接';
+        statusDiv.className = 'status-tag online';
+    });
+
+    client.on('close', () => {
+        statusDiv.innerText = '● 连接已断开';
+        statusDiv.className = 'status-tag offline';
+    });
+
+    function sendData() {
+        const timeVal = document.getElementById('timeInput').value;
+        const msgVal = document.getElementById('msgInput').value;
+
+        if (!msgVal) {
+            alert("请输入服药播报词");
+            return;
+        }
+
+        const [h, m] = timeVal.split(':').map(Number);
+
+        // 构造与 ESP32 cJSON 解析一致的格式
+        const payload = JSON.stringify({
+            h: h,
+            m: m,
+            msg: msgVal
+        });
+
+        client.publish(topic, payload, { qos: 0 }, (err) => {
+            if (!err) {
+                alert("设置已成功发送！");
+            } else {
+                alert("发送失败: " + err);
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
