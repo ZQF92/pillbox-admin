@@ -1,93 +1,158 @@
-<!-- index.html 完整覆盖 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能药盒远程管家 V2.0</title>
+    <title>智能药盒远程管家</title>
+    <!-- 引入 MQTT.js 库 -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        :root { --primary-color: #007AFF; --bg-color: #F2F2F7; }
+        :root { 
+            --primary-color: #007AFF; 
+            --success-color: #28CD41;
+            --bg-color: #F2F2F7; 
+        }
         body { font-family: -apple-system, system-ui, sans-serif; background-color: var(--bg-color); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .app-container { width: 92%; max-width: 400px; background: white; border-radius: 25px; padding: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); }
-        .header { text-align: center; margin-bottom: 20px; }
-        .status-tag { display: inline-block; padding: 4px 12px; border-radius: 50px; font-size: 12px; font-weight: 600; }
+        .header { text-align: center; margin-bottom: 25px; }
+        .header h1 { font-size: 22px; color: #1C1C1E; margin: 0; }
+        
+        /* 状态标签样式 */
+        .status-tag { display: inline-block; padding: 4px 12px; border-radius: 50px; font-size: 12px; margin-top: 8px; font-weight: 600; }
         .online { background: #E2F9E1; color: #28CD41; }
         .offline { background: #FFE5E5; color: #FF3B30; }
-        .input-group { background: #F9F9F9; padding: 12px; border-radius: 15px; margin-bottom: 15px; border: 1px solid #E5E5EA; }
-        label { font-size: 12px; color: #8E8E93; display: block; margin-bottom: 5px; }
-        input, select { width: 100%; border: none; background: transparent; font-size: 16px; outline: none; padding: 5px 0; }
-        button { width: 100%; padding: 16px; background: var(--primary-color); color: white; border: none; border-radius: 14px; font-size: 17px; font-weight: 600; cursor: pointer; }
-        .feedback-panel { margin-top: 20px; background: #F2F2F7; border-radius: 12px; padding: 12px; border: 1px solid #D1D1D6; font-size: 14px; }
+
+        /* 配置区域样式 */
+        .section-title { font-size: 14px; color: #8E8E93; margin-bottom: 10px; display: block; font-weight: 600; }
+        .input-group { background: #F9F9F9; padding: 15px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #E5E5EA; }
+        input { width: 100%; padding: 10px; border: none; background: transparent; font-size: 17px; outline: none; }
+        hr { border: 0; border-top: 1px solid #E5E5EA; margin: 10px 0; }
+
+        /* 按钮样式 */
+        button { width: 100%; padding: 16px; background: var(--primary-color); color: white; border: none; border-radius: 14px; font-size: 17px; font-weight: 600; cursor: pointer; transition: 0.3s; }
+        button:active { transform: scale(0.97); opacity: 0.9; }
+
+        /* 反馈监控区域样式 */
+        .feedback-panel { margin-top: 25px; background: #F2F2F7; border-radius: 15px; padding: 15px; border: 1px solid #D1D1D6; }
+        .log-entry { font-size: 14px; color: #1C1C1E; line-height: 1.5; }
+        .log-time { color: var(--primary-color); font-weight: bold; margin-right: 5px; }
+        .waiting { color: #8E8E93; font-style: italic; }
+
+        .footer { text-align: center; font-size: 11px; color: #AEAEB2; margin-top: 20px; }
     </style>
 </head>
 <body>
 
 <div class="app-container">
     <div class="header">
-        <h1 style="font-size: 20px; margin: 0;">💊 孝心药盒远程端</h1>
+        <h1>💊 孝心药盒远程端</h1>
         <div id="status" class="status-tag offline">云端连接中...</div>
     </div>
 
+    <!-- 远程设置部分 -->
+    <span class="section-title">设置提醒计划</span>
     <div class="input-group">
-        <label>⏰ 提醒时间</label>
+        <label style="font-size: 12px; color: #8E8E93;">提醒时间</label>
         <input type="time" id="timeInput" value="08:30">
-    </div>
-
-    <div class="input-group">
-        <label>🔢 用药数量 (1-100)</label>
-        <input type="number" id="numInput" min="1" max="100" value="2">
-    </div>
-
-    <div class="input-group">
-        <label>📏 用药单位</label>
-        <select id="unitInput">
-            <option value="1">片 (Pian)</option>
-            <option value="2">粒 (Li)</option>
-            <option value="3">毫升 (ml)</option>
-            <option value="4">包 (Bao)</option>
-            <option value="5">支 (Zhi)</option>
-        </select>
+        <hr>
+        <label style="font-size: 12px; color: #8E8E93;">服药语音播报词</label>
+        <input type="text" id="msgInput" placeholder="例如：该吃感冒灵了">
     </div>
 
     <button onclick="sendData()">同步设置到药盒</button>
 
+    <!-- 状态反馈展示部分 -->
     <div class="feedback-panel">
-        <div id="logBox">等待药盒反馈...</div>
+        <span class="section-title" style="color: #1C1C1E;">实时监护动态</span>
+        <div id="logBox" class="log-entry waiting">等待药盒反馈...</div>
+    </div>
+
+    <div class="footer">
+        数据交换协议: MQTT over WSS (Port 8084)<br>
+        服务器: broker.emqx.io
     </div>
 </div>
 
 <script>
+    // --- MQTT 配置 ---
     const broker = 'wss://broker.emqx.io:8084/mqtt';
-    const client = mqtt.connect(broker, { clientId: 'Web_' + Math.random().toString(16).slice(2, 8) });
+    const configTopic = 'medbox/S3/config';  // 发送配置的主题
+    const statusTopic = 'medbox/S3/status';  // 接收反馈的主题
 
-    client.on('connect', () => {
-        document.getElementById('status').className = 'status-tag online';
-        document.getElementById('status').innerText = '● 云端已连接';
-        client.subscribe('medbox/S3/status');
+    const client = mqtt.connect(broker, {
+        clientId: 'Web_Children_' + Math.random().toString(16).substring(2, 8)
     });
 
+    const statusDiv = document.getElementById('status');
+    const logBox = document.getElementById('logBox');
+
+    // 1. 连接成功回调
+    client.on('connect', () => {
+        statusDiv.innerText = '● 云端已连接';
+        statusDiv.className = 'status-tag online';
+        
+        // 连接成功后订阅反馈主题
+        client.subscribe(statusTopic, (err) => {
+            if (!err) console.log('已订阅反馈主题:', statusTopic);
+        });
+    });
+
+    client.on('close', () => {
+        statusDiv.innerText = '● 连接已断开';
+        statusDiv.className = 'status-tag offline';
+    });
+
+    // 2. 核心逻辑：监听药盒发回的消息
     client.on('message', (topic, message) => {
-        if (topic === 'medbox/S3/status') {
-            document.getElementById('logBox').innerText = "[" + new Date().toLocaleTimeString() + "] " + message.toString();
-            document.getElementById('logBox').style.color = '#28CD41';
+        if (topic === statusTopic) {
+            const msgStr = message.toString();
+            console.log("收到药盒反馈:", msgStr);
+            
+            // 获取当前网页系统时间
+            const now = new Date();
+            const timeStr = now.getHours().toString().padStart(2, '0') + ":" + 
+                            now.getMinutes().toString().padStart(2, '0');
+
+            // 更新 UI
+            logBox.innerHTML = `<span class="log-time">[${timeStr}]</span> ${msgStr}`;
+            logBox.className = 'log-entry'; // 去除 waiting 样式
+            logBox.style.color = '#28CD41'; // 变为成功绿色
+            
+            // 提醒子女（手机震动）
+            if (navigator.vibrate) navigator.vibrate(200);
         }
     });
 
+    // 3. 发送配置逻辑
     function sendData() {
         const timeVal = document.getElementById('timeInput').value;
-        const numVal = parseInt(document.getElementById('numInput').value);
-        const unitVal = parseInt(document.getElementById('unitInput').value);
+        const msgVal = document.getElementById('msgInput').value;
 
-        if (numVal < 1 || numVal > 100) { alert("数量请输入 1-100"); return; }
+        if (!msgVal) {
+            alert("请输入服药语音播报词");
+            return;
+        }
 
         const [h, m] = timeVal.split(':').map(Number);
-        const payload = JSON.stringify({ h: h, m: m, num: numVal, unit: unitVal });
 
-        client.publish('medbox/S3/config', payload, { qos: 1 }, (err) => {
-            if (!err) alert("指令已发送！");
+        // 构造 JSON
+        const payload = JSON.stringify({
+            h: h,
+            m: m,
+            msg: msgVal
+        });
+
+        client.publish(configTopic, payload, { qos: 1 }, (err) => {
+            if (!err) {
+                alert("指令已发送！");
+                logBox.innerText = "设置已发送，等待老人确认...";
+                logBox.style.color = "#007AFF";
+            } else {
+                alert("发送失败: " + err);
+            }
         });
     }
 </script>
+
 </body>
 </html>
