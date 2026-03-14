@@ -3,76 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>药盒管理端-手动配置版</title>
+    <title>智能药盒管理系统</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f2f2f7; padding: 20px; display: flex; justify-content: center; }
-        .card { background: white; border-radius: 20px; padding: 25px; width: 100%; max-width: 400px; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
-        .item { margin-bottom: 15px; }
-        label { display: block; font-size: 13px; color: #888; margin-bottom: 5px; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 16px; }
-        button { width: 100%; padding: 15px; background: #007aff; color: white; border: none; border-radius: 12px; font-size: 17px; font-weight: bold; cursor: pointer; }
-        #log { margin-top: 20px; padding: 12px; border-radius: 10px; font-size: 14px; text-align: center; }
-        .success { background: #e2f9e1; color: #28cd41; }
-        .info { background: #e1f5fe; color: #0288d1; }
+        :root { --primary: #007AFF; --bg: #F2F2F7; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 0; }
+        .view { display: none; padding: 20px; max-width: 500px; margin: auto; }
+        .view.active { display: block; }
+        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; }
+        .nav-bar { background: white; padding: 15px; display: flex; justify-content: space-around; position: fixed; bottom: 0; width: 100%; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+        .nav-item { font-size: 12px; color: #888; text-align: center; }
+        .nav-item.active { color: var(--primary); }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2 style="text-align:center">💊 远程药品配置</h2>
-    
-    <div class="item">
-        <label>1. 卡片唯一 ID (UID)</label>
-        <input type="text" id="uidInput" placeholder="请输入卡片UID(如:A1B2C3D4)">
+    <!-- 1. 登录页面 -->
+    <div id="loginView" class="view active">
+        <div class="card">
+            <h2 style="text-align:center">🔐 用户登录</h2>
+            <input type="text" id="loginUser" placeholder="用户名">
+            <input type="password" id="loginPass" placeholder="密码">
+            <button onclick="handleLogin()">登录</button>
+            <p style="text-align:center; font-size:14px">
+                <a href="#" onclick="showView('registerView')">立即注册</a> | 
+                <a href="#" onclick="showView('resetView')">忘记密码</a>
+            </p>
+        </div>
     </div>
 
-    <div class="item">
-        <label>2. 药品名称</label>
-        <input type="text" id="nameInput" placeholder="例如：感冒灵">
+    <!-- 2. 注册页面 -->
+    <div id="registerView" class="view">
+        <div class="card">
+            <h2>📝 用户注册</h2>
+            <input type="text" id="regUser" placeholder="设置用户名">
+            <input type="password" id="regPass" placeholder="设置密码">
+            <button onclick="handleRegister()">完成注册</button>
+            <button style="background:#888" onclick="showView('loginView')">返回</button>
+        </div>
     </div>
 
-    <div class="item">
-        <label>3. 用药剂量</label>
-        <input type="text" id="doseInput" placeholder="例如：两粒">
+    <!-- 3. 重置密码页面 -->
+    <div id="resetView" class="view">
+        <div class="card">
+            <h2>🔄 重置密码</h2>
+            <input type="text" id="resetUser" placeholder="用户名">
+            <input type="password" id="newPass" placeholder="新密码">
+            <button onclick="handleReset()">确认修改</button>
+            <button style="background:#888" onclick="showView('loginView')">返回</button>
+        </div>
     </div>
 
-    <div class="item">
-        <label>4. 提醒时间</label>
-        <input type="time" id="timeInput" value="08:30">
+    <!-- 4. NFC卡绑定页面 -->
+    <div id="bindView" class="view">
+        <h2>🏷️ NFC卡资产管理</h2>
+        <div class="card">
+            <label>新卡绑定 (UID由手机软件获取)</label>
+            <input type="text" id="newUid" placeholder="输入卡片UID">
+            <input type="text" id="newCardName" placeholder="给卡片起个名 (如:卡1)">
+            <button onclick="addCard()">绑定新卡</button>
+        </div>
+        <h3>已绑定列表</h3>
+        <div id="cardList" class="card"></div>
     </div>
 
-    <button onclick="sendConfig()">同步到药盒</button>
+    <!-- 5. 用药设置页面 -->
+    <div id="medView" class="view">
+        <h2>💊 智能服药计划</h2>
+        <div id="medCardList"></div>
+    </div>
 
-    <div id="log" class="info">等待操作...</div>
-</div>
+    <!-- 6. 详细设置子页面 -->
+    <div id="configSubView" class="view">
+        <div class="card">
+            <h3 id="configTitle">设置</h3>
+            <label>药名</label><input type="text" id="drugName">
+            <label>用量</label><input type="text" id="drugDose">
+            <label>提醒时间</label><input type="time" id="drugTime">
+            <button onclick="syncToHardware()">同步设置到药盒</button>
+            <button style="background:#888" onclick="showView('medView')">取消</button>
+        </div>
+    </div>
+
+    <!-- 底部导航栏 (登录后显示) -->
+    <div id="navBar" class="nav-bar" style="display:none">
+        <div class="nav-item" onclick="showView('bindView')">🗂️ 绑定</div>
+        <div class="nav-item" onclick="showView('medView')">💊 用药</div>
+        <div class="nav-item" onclick="logout()">🚪 退出</div>
+    </div>
 
 <script>
+    // --- 数据初始化 ---
+    let currentUser = JSON.parse(localStorage.getItem('user')) || null;
+    let cards = JSON.parse(localStorage.getItem('cards')) || [];
+    let selectedIdx = -1;
+
+    // --- MQTT 配置 ---
     const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
-    
-    client.on('connect', () => {
-        client.subscribe('medbox/S3/status');
-        document.getElementById('log').innerText = "云端连接成功";
-    });
+    client.on('connect', () => client.subscribe('medbox/S3/status'));
+    client.on('message', (topic, msg) => alert("来自药盒反馈: " + msg.toString()));
 
-    client.on('message', (topic, msg) => {
-        document.getElementById('log').innerText = "药盒反馈: " + msg.toString();
-        document.getElementById('log').className = "success";
-    });
+    // --- 路由管理 ---
+    function showView(id) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(id === 'bindView') renderBindList();
+        if(id === 'medView') renderMedList();
+    }
 
-    function sendConfig() {
-        const uid = document.getElementById('uidInput').value;
-        const name = document.getElementById('nameInput').value;
-        const dose = document.getElementById('doseInput').value;
-        const time = document.getElementById('timeInput').value;
+    // --- 登录注册逻辑 ---
+    function handleRegister() {
+        const u = document.getElementById('regUser').value;
+        const p = document.getElementById('regPass').value;
+        if(!u || !p) return alert("请填满");
+        localStorage.setItem('userData', JSON.stringify({u, p}));
+        alert("注册成功！"); showView('loginView');
+    }
 
-        if(!uid || !name || !dose) { alert("请完整填所有信息！"); return; }
+    function handleLogin() {
+        const u = document.getElementById('loginUser').value;
+        const p = document.getElementById('loginPass').value;
+        const saved = JSON.parse(localStorage.getItem('userData'));
+        if(saved && saved.u === u && saved.p === p) {
+            currentUser = u;
+            document.getElementById('navBar').style.display = 'flex';
+            showView('bindView');
+        } else { alert("账户或密码错误"); }
+    }
+
+    function handleReset() {
+        const u = document.getElementById('resetUser').value;
+        const p = document.getElementById('newPass').value;
+        const saved = JSON.parse(localStorage.getItem('userData'));
+        if(saved && saved.u === u) {
+            localStorage.setItem('userData', JSON.stringify({u, p}));
+            alert("重置成功！"); showView('loginView');
+        }
+    }
+
+    // --- 绑定逻辑 ---
+    function addCard() {
+        if(cards.length >= 5) return alert("最多绑定5张卡");
+        const uid = document.getElementById('newUid').value.toUpperCase();
+        const name = document.getElementById('newCardName').value;
+        if(!uid || !name) return alert("请填写完整");
+        cards.push({ uid, name, drug:'', dose:'', time:'08:00' });
+        localStorage.setItem('cards', JSON.stringify(cards));
+        renderBindList();
+    }
+
+    function renderBindList() {
+        const container = document.getElementById('cardList');
+        container.innerHTML = cards.map((c, i) => `
+            <div class="list-item">
+                <span><b>${c.name}</b> (${c.uid})</span>
+                <button style="width:60px; padding:5px; background:red" onclick="deleteCard(${i})">删除</button>
+            </div>
+        `).join('') || '暂无绑定卡片';
+    }
+
+    function deleteCard(i) {
+        cards.splice(i, 1);
+        localStorage.setItem('cards', JSON.stringify(cards));
+        renderBindList();
+    }
+
+    // --- 用药管理逻辑 ---
+    function renderMedList() {
+        const container = document.getElementById('medCardList');
+        container.innerHTML = cards.map((c, i) => `
+            <div class="card" onclick="openConfig(${i})">
+                <div style="font-weight:bold; color:var(--primary)">${c.name}</div>
+                <div style="font-size:14px; color:#555">药品: ${c.drug || '点击设置'}</div>
+                <div style="font-size:14px; color:#555">时间: ${c.time}</div>
+            </div>
+        `).join('') || '请先去绑定页面添加卡片';
+    }
+
+    function openConfig(i) {
+        selectedIdx = i;
+        const c = cards[i];
+        document.getElementById('configTitle').innerText = "设置 " + c.name;
+        document.getElementById('drugName').value = c.drug;
+        document.getElementById('drugDose').value = c.dose;
+        document.getElementById('drugTime').value = c.time;
+        showView('configSubView');
+    }
+
+    function syncToHardware() {
+        const drug = document.getElementById('drugName').value;
+        const dose = document.getElementById('drugDose').value;
+        const time = document.getElementById('drugTime').value;
+        
+        cards[selectedIdx].drug = drug;
+        cards[selectedIdx].dose = dose;
+        cards[selectedIdx].time = time;
+        localStorage.setItem('cards', JSON.stringify(cards));
 
         const [h, m] = time.split(':').map(Number);
-        const payload = JSON.stringify({ uid, name, dose, h, m });
+        const payload = JSON.stringify({
+            idx: selectedIdx,
+            uid: cards[selectedIdx].uid,
+            drug: drug,
+            dose: dose,
+            h: h, m: m
+        });
 
-        client.publish('medbox/S3/config', payload, { qos: 1 });
-        document.getElementById('log').innerText = "正在同步设置...";
+        client.publish('medbox/S3/config', payload, {qos: 1});
+        showView('medView');
+    }
+
+    function logout() {
+        document.getElementById('navBar').style.display = 'none';
+        showView('loginView');
     }
 </script>
 </body>
