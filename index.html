@@ -3,217 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>孝心药盒远程管家 - 毕业设计演示版</title>
-    <!-- 引入 MQTT.js 库 -->
+    <title>药盒管理端-手动配置版</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        :root { 
-            --primary: #007AFF; 
-            --success: #28CD41;
-            --warning: #FF9500;
-            --danger: #FF3B30;
-            --bg: #F2F2F7; 
-        }
-        body { font-family: -apple-system, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 450px; background: white; border-radius: 20px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
-        
-        .header { text-align: center; margin-bottom: 20px; }
-        .status-bar { display: inline-block; padding: 5px 12px; border-radius: 50px; font-size: 12px; font-weight: bold; margin-top: 5px; }
-        .online { background: #E2F9E1; color: var(--success); }
-        .offline { background: #FFE5E5; color: var(--danger); }
-
-        .section { margin-top: 20px; }
-        .section-title { font-size: 14px; color: #8E8E93; margin-bottom: 10px; font-weight: 600; display: block; }
-        
-        /* 输入框样式 */
-        .input-group { background: #F9F9F9; padding: 15px; border-radius: 15px; border: 1px solid #E5E5EA; }
-        .field { margin-bottom: 10px; }
-        .field:last-child { margin-bottom: 0; }
-        label { font-size: 12px; color: #8E8E93; display: block; margin-bottom: 5px; }
-        input { width: 100%; border: none; background: transparent; font-size: 16px; outline: none; padding: 5px 0; border-bottom: 1px solid #E5E5EA; }
-        input:focus { border-bottom-color: var(--primary); }
-        
-        /* UID 自动填充高亮效果 */
-        #uidInput { color: var(--primary); font-family: monospace; font-weight: bold; }
-        .highlight { animation: pulse 1.5s infinite; }
-        @keyframes pulse {
-            0% { background-color: #F9F9F9; }
-            50% { background-color: #E1F5FE; }
-            100% { background-color: #F9F9F9; }
-        }
-
-        button { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: 14px; font-size: 17px; font-weight: 600; cursor: pointer; transition: 0.2s; margin-top: 20px; }
-        button:active { transform: scale(0.98); opacity: 0.9; }
-
-        /* 反馈面板 */
-        .feedback-panel { margin-top: 25px; background: #1C1C1E; border-radius: 15px; padding: 15px; min-height: 80px; }
-        .log-msg { color: #FFF; font-size: 14px; line-height: 1.6; }
-        .log-time { color: var(--success); margin-right: 8px; font-weight: bold; }
-        .hint { color: #8E8E93; font-size: 12px; text-align: center; margin-top: 15px; }
+        body { font-family: sans-serif; background: #f2f2f7; padding: 20px; display: flex; justify-content: center; }
+        .card { background: white; border-radius: 20px; padding: 25px; width: 100%; max-width: 400px; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        .item { margin-bottom: 15px; }
+        label { display: block; font-size: 13px; color: #888; margin-bottom: 5px; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 15px; background: #007aff; color: white; border: none; border-radius: 12px; font-size: 17px; font-weight: bold; cursor: pointer; }
+        #log { margin-top: 20px; padding: 12px; border-radius: 10px; font-size: 14px; text-align: center; }
+        .success { background: #e2f9e1; color: #28cd41; }
+        .info { background: #e1f5fe; color: #0288d1; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="header">
-        <h2>智能药盒管理端</h2>
-        <div id="connStatus" class="status-bar offline">服务器连接中...</div>
+<div class="card">
+    <h2 style="text-align:center">💊 远程药品配置</h2>
+    
+    <div class="item">
+        <label>1. 卡片唯一 ID (UID)</label>
+        <input type="text" id="uidInput" placeholder="请输入卡片UID(如:A1B2C3D4)">
     </div>
 
-    <!-- 步骤一：获取卡片信息 -->
-    <div class="section">
-        <span class="section-title">第一步：感应NFC卡（由药盒端操作）</span>
-        <div id="uidBox" class="input-group">
-            <label>卡片唯一标识 (UID)</label>
-            <input type="text" id="uidInput" placeholder="请在药盒上刷卡获取 ID" readonly>
-        </div>
+    <div class="item">
+        <label>2. 药品名称</label>
+        <input type="text" id="nameInput" placeholder="例如：感冒灵">
     </div>
 
-    <!-- 步骤二：填写药品信息 -->
-    <div class="section">
-        <span class="section-title">第二步：配置药品与用量</span>
-        <div class="input-group">
-            <div class="field">
-                <label>药品名称</label>
-                <input type="text" id="nameInput" placeholder="例如：感冒灵">
-            </div>
-            <div class="field">
-                <label>用药剂量 (语音将播报此项)</label>
-                <input type="text" id="doseInput" placeholder="例如：两粒、10毫升">
-            </div>
-        </div>
+    <div class="item">
+        <label>3. 用药剂量</label>
+        <input type="text" id="doseInput" placeholder="例如：两粒">
     </div>
 
-    <!-- 步骤三：设置时间 -->
-    <div class="section">
-        <span class="section-title">第三步：设定提醒时间</span>
-        <div class="input-group">
-            <input type="time" id="timeInput" value="08:30">
-        </div>
+    <div class="item">
+        <label>4. 提醒时间</label>
+        <input type="time" id="timeInput" value="08:30">
     </div>
 
-    <button onclick="publishConfig()">同步设置到药盒</button>
+    <button onclick="sendConfig()">同步到药盒</button>
 
-    <!-- 实时监护动态 -->
-    <div class="section">
-        <span class="section-title">监护日志</span>
-        <div class="feedback-panel" id="logPanel">
-            <div class="log-msg" style="color: #8E8E93;">等待药盒端反馈...</div>
-        </div>
-    </div>
-
-    <div class="hint">
-        技术方案：MQTT over WebSocket (Port 8084)<br>
-        硬件状态：PN532 NFC + SYN6288 TTS
-    </div>
+    <div id="log" class="info">等待操作...</div>
 </div>
 
 <script>
-    // --- MQTT 配置 ---
-    const broker = 'wss://broker.emqx.io:8084/mqtt';
-    const TOPIC_CONFIG = 'medbox/S3/config';    // 发送配置给硬件
-    const TOPIC_STATUS = 'medbox/S3/status';    // 接收硬件反馈（成功/失败/服药提醒）
-    const TOPIC_UID    = 'medbox/S3/uid_report'; // 接收药盒扫到的卡片ID
-
-    const client = mqtt.connect(broker, {
-        clientId: 'Web_Manager_' + Math.random().toString(16).substring(2, 8)
-    });
-
-    const connStatus = document.getElementById('connStatus');
-    const uidInput = document.getElementById('uidInput');
-    const logPanel = document.getElementById('logPanel');
-    const uidBox = document.getElementById('uidBox');
-
-    // 1. 建立连接
+    const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+    
     client.on('connect', () => {
-        connStatus.innerText = '● 云端已连接';
-        connStatus.className = 'status-bar online';
-        
-        // 订阅反馈主题和UID上报主题
-        client.subscribe([TOPIC_STATUS, TOPIC_UID], (err) => {
-            if (!err) console.log("订阅成功");
-        });
+        client.subscribe('medbox/S3/status');
+        document.getElementById('log').innerText = "云端连接成功";
     });
 
-    client.on('close', () => {
-        connStatus.innerText = '● 连接已断开';
-        connStatus.className = 'status-bar offline';
+    client.on('message', (topic, msg) => {
+        document.getElementById('log').innerText = "药盒反馈: " + msg.toString();
+        document.getElementById('log').className = "success";
     });
 
-    // 2. 消息处理核心逻辑
-    client.on('message', (topic, message) => {
-        const payload = message.toString();
-        const now = new Date();
-        const timeStr = now.getHours().toString().padStart(2, '0') + ":" + 
-                        now.getMinutes().toString().padStart(2, '0');
-
-        // 情况 A：药盒扫到了卡，上报了 UID
-        if (topic === TOPIC_UID) {
-            uidInput.value = payload;
-            // 视觉特效：高亮闪烁提示
-            uidBox.classList.add('highlight');
-            setTimeout(() => uidBox.classList.remove('highlight'), 2000);
-            
-            updateLog("检测到药盒扫卡，自动填充 ID: " + payload, "#007AFF");
-            // 手机震动反馈
-            if (navigator.vibrate) navigator.vibrate(100);
-        } 
-        // 情况 B：收到药盒的反馈状态（绑定成功、老人服药等）
-        else if (topic === TOPIC_STATUS) {
-            if (payload.includes("SUCCESS")) {
-                updateLog(payload.replace("SUCCESS:", ""), "#28CD41");
-            } else if (payload.includes("ERROR")) {
-                updateLog(payload, "#FF3B30");
-            } else {
-                // 普通状态（如：老人已刷卡服药）
-                updateLog(payload, "#FF9500");
-            }
-        }
-    });
-
-    // 3. 发布配置函数
-    function publishConfig() {
-        const uid = uidInput.value;
+    function sendConfig() {
+        const uid = document.getElementById('uidInput').value;
         const name = document.getElementById('nameInput').value;
         const dose = document.getElementById('doseInput').value;
         const time = document.getElementById('timeInput').value;
 
-        if (!uid) {
-            alert("请先在药盒上刷卡以获取UID！");
-            return;
-        }
-        if (!name || !dose) {
-            alert("请完整填写药名和用量！");
-            return;
-        }
+        if(!uid || !name || !dose) { alert("请完整填所有信息！"); return; }
 
         const [h, m] = time.split(':').map(Number);
+        const payload = JSON.stringify({ uid, name, dose, h, m });
 
-        // 构造发送给 ESP32 的 JSON
-        const data = JSON.stringify({
-            uid: uid,
-            name: name,
-            dose: dose,
-            h: h,
-            m: m
-        });
-
-        client.publish(TOPIC_CONFIG, data, { qos: 1 }, (err) => {
-            if (!err) {
-                updateLog("配置指令已发出，等待硬件生效...", "#007AFF");
-            } else {
-                alert("发布失败：" + err);
-            }
-        });
-    }
-
-    // 更新日志显示
-    function updateLog(msg, color) {
-        const now = new Date();
-        const ts = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-        logPanel.innerHTML = `<div class="log-msg"><span class="log-time">[${ts}]</span><span style="color:${color}">${msg}</span></div>`;
+        client.publish('medbox/S3/config', payload, { qos: 1 });
+        document.getElementById('log').innerText = "正在同步设置...";
     }
 </script>
-
 </body>
 </html>
