@@ -27,7 +27,7 @@
 </head>
 <body>
 
-    <!-- 1. 登录 -->
+    <!-- 1. 登录视图 -->
     <div id="loginView" class="view active">
         <div class="card" style="margin-top:50px">
             <h2>🔐 药盒账户登录</h2>
@@ -38,7 +38,7 @@
         </div>
     </div>
 
-    <!-- 2. 注册 -->
+    <!-- 2. 注册视图 -->
     <div id="regView" class="view">
         <div class="card">
             <h2>📝 注册云端账户</h2>
@@ -49,7 +49,7 @@
         </div>
     </div>
 
-    <!-- 3. 卡片绑定 -->
+    <!-- 3. 卡片绑定视图 -->
     <div id="bindView" class="view">
         <h2>🏷️ 卡片云端绑定</h2>
         <div class="card">
@@ -60,13 +60,13 @@
         <div id="cardListContainer"></div>
     </div>
 
-    <!-- 4. 用药列表 -->
+    <!-- 4. 用药列表视图 -->
     <div id="medView" class="view">
         <h2>💊 实时用药提醒</h2>
         <div id="medCardListContainer"></div>
     </div>
 
-    <!-- 5. 详情设置 -->
+    <!-- 5. 详情设置视图 -->
     <div id="configSubView" class="view">
         <div class="card">
             <h2 id="configTitle">设置详情</h2>
@@ -80,7 +80,7 @@
         </div>
     </div>
 
-    <!-- 6. 历史记录 -->
+    <!-- 6. 历史记录视图 -->
     <div id="historyView" class="view">
         <h2>📜 服务器服药记录</h2>
         <div id="historyContainer"></div>
@@ -94,57 +94,67 @@
         <div class="nav-item" onclick="location.reload()">🚪退出</div>
     </div>
 
-    <!-- 引入 MQTT -->
+    <!-- 引用 MQTT.js -->
     <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
 
-    <!-- 核心逻辑：采用 ESM 模式 -->
+    <!-- 核心业务逻辑 -->
     <script type="module">
-        // 1. 从云端引入 SDK，彻底解决 exports/require 报错
+        // 1. 导入 Laf SDK (ESM 模式)
         import { Cloud } from 'https://cdn.jsdelivr.net/npm/laf-client-sdk@1.0.0/+esm'
 
-        // 2. 初始化单例，挂载到 window 方便全局访问
-        const cloudInstance = new Cloud({
+        // 2. 初始化云端实例
+        const cloud = new Cloud({
             baseUrl: "https://m14yuhwtlw.bja.sealos.run",
             getAccessToken: () => localStorage.getItem("access_token")
         });
-        window.cloud = cloudInstance;
+        window.cloud = cloud; // 暴露给全局
 
-        // 3. 业务变量声明
+        // 3. 全局业务变量
         let cloudCards = [];
         let selectedCloudId = "";
         let selectedIdx = 0;
         let currentUserName = "";
-
         const GB2312_MAP = {"一":"D2BB","二":"B6FE","三":"C8FD","四":"CBC4","五":"CEE5","两":"C1BD","粒":"C1A3","片":"C6AC","颗":"BFC1","包":"B0FC","毫":"BAC1","升":"C9FD","次":"B4CE"};
 
-        // 4. MQTT 客户端初始化
-        const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+        // 4. MQTT 连接逻辑 (优化版)
+        const mqttOptions = {
+            connectTimeout: 5000,
+            reconnectPeriod: 5000,
+            clientId: 'web_client_' + Math.random().toString(16).substr(2, 8),
+        };
+        
+        // 尝试连接公共 Broker
+        const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', mqttOptions);
+
         client.on('connect', () => {
-            console.log("✅ MQTT 已连接");
+            console.log("✅ MQTT 服务已连接");
             client.subscribe('medbox/S3/status');
+        });
+
+        client.on('error', (err) => {
+            console.error("❌ MQTT 连接失败: ", err);
         });
 
         client.on('message', (topic, msg) => {
             try {
                 const data = JSON.parse(msg.toString());
                 if(data.type === 'report') handleMedReport(data);
-            } catch(e) { console.log("收到反馈:", msg.toString()); }
+            } catch(e) { console.log("收到反馈文字:", msg.toString()); }
         });
 
-        // 5. 业务函数定义
+        // 5. 业务函数
         async function handleRegister() {
             const user = document.getElementById('regUser').value;
             const pass = document.getElementById('regPass').value;
-            if(!user || !pass) return alert("请填写完整");
-            
+            if(!user || !pass) return alert("账号密码不能为空");
             try {
                 await window.cloud.invoke("db-proxy", {
                     action: "add", collection: "users",
                     data: { username: user, password: pass }
                 });
-                alert("云端账户激活成功！");
-                showView('loginView');
-            } catch(e) { alert("注册失败: " + e.message); }
+                alert("云端账户创建成功！请登录");
+                window.showView('loginView');
+            } catch(e) { alert("注册失败，请检查网络"); }
         }
 
         async function handleLogin() {
@@ -157,15 +167,16 @@
                 });
                 if(res.data && res.data.length > 0) {
                     currentUserName = user;
-                    showView('bindView');
+                    window.showView('bindView');
                     fetchCards();
-                } else alert("账户名或密码错误");
-            } catch(e) { alert("登录异常"); }
+                } else alert("用户名或密码错误");
+            } catch(e) { alert("登录请求失败"); }
         }
 
         async function addCardToCloud() {
             const uid = document.getElementById('newUid').value.toUpperCase().replace(/[:\s]/g, '');
             const alias = document.getElementById('newAlias').value;
+            if(!uid) return alert("请输入UID");
             await window.cloud.invoke("db-proxy", {
                 action: "add", collection: "pill_plans",
                 data: {
@@ -173,7 +184,7 @@
                     time: '08:00', lastDate: '', drug: '', dose: ''
                 }
             });
-            alert("绑定信息已同步至 Laf 云端");
+            alert("卡片已绑定至云端");
             fetchCards();
         }
 
@@ -200,7 +211,7 @@
                         <b style="color:var(--primary)">${c.time}</b>
                     </div>
                 </div>
-            `).join('') || '<p style="text-align:center">暂无计划</p>';
+            `).join('') || '<p style="text-align:center">暂无绑定卡片</p>';
         }
 
         window.openEdit = (idx, id) => {
@@ -217,7 +228,7 @@
                 <div class="status-tag ${isTaken?'taken':'not-taken'}" style="width:100%;text-align:center;padding:10px 0;margin-bottom:10px">
                     ${isTaken ? '✅ 老人今日已服药' : '❌ 老人今日尚未服药'}
                 </div>`;
-            showView('configSubView');
+            window.showView('configSubView');
         }
 
         async function saveAndSync() {
@@ -230,22 +241,28 @@
                 doseHex += (GB2312_MAP[char] || char.charCodeAt(0).toString(16).toUpperCase());
             }
 
+            // 更新云端数据库
             await window.cloud.invoke("db-proxy", {
                 action: "update", collection: "pill_plans", id: selectedCloudId,
                 data: { drug, dose, time, doseHex }
             });
 
-            client.publish('medbox/S3/config', JSON.stringify({
-                idx: selectedIdx, 
-                uid: document.getElementById('editUid').value, 
-                drug, 
-                dose_hex: doseHex,
-                h: parseInt(time.split(':')[0]), 
-                m: parseInt(time.split(':')[1])
-            }), {qos:1});
+            // 通过 MQTT 同步硬件
+            if (client.connected) {
+                client.publish('medbox/S3/config', JSON.stringify({
+                    idx: selectedIdx, 
+                    uid: document.getElementById('editUid').value, 
+                    drug, 
+                    dose_hex: doseHex,
+                    h: parseInt(time.split(':')[0]), 
+                    m: parseInt(time.split(':')[1])
+                }), {qos:1});
+                alert("同步成功！硬件已实时更新");
+            } else {
+                alert("云端已保存，但 MQTT 连接断开，硬件稍后会自动同步");
+            }
             
-            alert("同步成功！硬件已收到指令");
-            showView('medView');
+            window.showView('medView');
             fetchCards();
         }
 
@@ -254,7 +271,7 @@
                 action: "add", collection: "med_logs",
                 data: { drug: data.drug, owner: currentUserName, time: new Date().toLocaleString() }
             });
-            const target = cloudCards[data.idx];
+            const target = cloudCards.find(c => c.uid === data.uid) || cloudCards[data.idx];
             if(target) {
                 await window.cloud.invoke("db-proxy", {
                     action: "update", collection: "pill_plans", id: target._id,
@@ -267,7 +284,8 @@
         window.showView = (id) => {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(id).classList.add('active');
-            document.getElementById('navBar').style.display = ['loginView','regView'].includes(id)?'none':'flex';
+            const isNoNav = ['loginView','regView'].includes(id);
+            document.getElementById('navBar').style.display = isNoNav ? 'none' : 'flex';
             if(id === 'historyView') fetchHistory();
         }
 
@@ -279,12 +297,12 @@
             document.getElementById('historyContainer').innerHTML = (res.data || []).map(l => `
                 <div class="history-item">
                     <span style="color:var(--primary)">${l.time}</span><br>
-                    <b>${l.drug}</b> 服用核验成功
+                    <b>${l.drug}</b> 服药核验成功
                 </div>
-            `).join('') || '暂无历史';
+            `).join('') || '暂无历史记录';
         }
 
-        // 将所有业务函数挂载到 window，确保 HTML onclick 可用
+        // 将业务函数挂载到 window，确保 HTML onclick 属性可用
         window.handleRegister = handleRegister;
         window.handleLogin = handleLogin;
         window.addCardToCloud = addCardToCloud;
