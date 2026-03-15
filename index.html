@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>智能药盒云管家 - 完整功能版</title>
+    <title>智能药盒云管家 - 毕设交付版</title>
     <style>
         :root { --primary: #007AFF; --success: #28CD41; --danger: #FF3B30; --bg: #F2F2F7; --gray: #8e8e93; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); margin: 0; padding-bottom: 90px; }
@@ -24,12 +24,11 @@
         .nav-item { font-size: 22px; flex: 1; text-align: center; cursor: pointer; color: var(--gray); }
         .nav-item span { display: block; font-size: 10px; margin-top: 2px; }
         .nav-item.active { color: var(--primary); }
-        .btn-del { background: var(--danger); color: white; border: none; padding: 5px 10px; border-radius: 6px; font-size: 12px; }
     </style>
 </head>
 <body>
 
-    <!-- 1. 登录视图 -->
+    <!-- 1. 登录 -->
     <div id="loginView" class="view active">
         <div class="card" style="margin-top:50px">
             <h2>🔐 药盒账户登录</h2>
@@ -40,7 +39,7 @@
         </div>
     </div>
 
-    <!-- 2. 注册视图 -->
+    <!-- 2. 注册 -->
     <div id="regView" class="view">
         <div class="card">
             <h2>📝 注册云端账户</h2>
@@ -51,26 +50,24 @@
         </div>
     </div>
 
-    <!-- 3. 卡片管理视图 -->
+    <!-- 3. 卡片管理 -->
     <div id="bindView" class="view">
         <h2>🏷️ 卡片管理</h2>
         <div class="card">
-            <label>新卡片 UID</label>
-            <input type="text" id="newUid" placeholder="如: 41DCBA06">
-            <label>备注名称</label>
-            <input type="text" id="newAlias" placeholder="如: 爷爷的降压药">
+            <label>新卡片 UID</label><input type="text" id="newUid" placeholder="如: 41DCBA06">
+            <label>备注名称</label><input type="text" id="newAlias" placeholder="如: 爷爷的药盒">
             <button onclick="addCardToCloud()">绑定新卡片</button>
         </div>
         <div id="cardListContainer"></div>
     </div>
 
-    <!-- 4. 用药列表视图 -->
+    <!-- 4. 用药列表 -->
     <div id="medView" class="view">
-        <h2>💊 实时用药提醒</h2>
+        <h2>💊 实时提醒状态</h2>
         <div id="medCardListContainer"></div>
     </div>
 
-    <!-- 5. 详情设置视图 -->
+    <!-- 5. 详情页 -->
     <div id="configSubView" class="view">
         <div class="card">
             <h2 id="configTitle">设置详情</h2>
@@ -84,34 +81,35 @@
         </div>
     </div>
 
-    <!-- 6. 历史记录视图 -->
+    <!-- 6. 历史记录 -->
     <div id="historyView" class="view">
-        <h2>📜 服务器服药记录</h2>
+        <h2>📜 服药历史追踪</h2>
         <div id="historyContainer"></div>
     </div>
 
-    <!-- 7. 用户管理视图 (新增) -->
+    <!-- 7. 我的 (注销功能) -->
     <div id="userView" class="view">
-        <h2>👤 个人中心</h2>
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 50px; margin-bottom: 10px;">👴</div>
+        <div class="card" style="text-align: center; padding: 30px 20px;">
+            <div style="font-size: 50px; margin-bottom: 10px;">👤</div>
             <h3 id="displayUserName">未登录</h3>
-            <p style="color: var(--gray); font-size: 14px;">当前已连接至：Sealos Beijing Cloud</p>
-            <hr style="border: 0.5px solid #eee; margin: 20px 0;">
-            <button class="danger" onclick="location.reload()">退出当前账号</button>
+            <p id="mqttStatusLabel" style="font-size: 12px; color: var(--gray);">实时推送: 连接中...</p>
+            <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+                <button class="secondary" onclick="handleLogout()" style="margin-bottom: 12px;">退出当前登录</button>
+                <hr style="border:0; border-top:1px dashed #ddd; margin: 15px 0;">
+                <p style="font-size: 11px; color: var(--gray);">危险操作：注销将清空云端所有数据</p>
+                <button onclick="handleDeleteAccount()" style="background:none; color:var(--danger); border:1px solid var(--danger); padding:8px; font-size:13px;">注销并抹除账户</button>
+            </div>
         </div>
     </div>
 
-    <!-- 底部导航栏 -->
     <div id="navBar" class="nav-bar">
-        <div class="nav-item" onclick="showView('bindView')">🏷️<span>绑定</span></div>
-        <div class="nav-item" onclick="showView('medView')">💊<span>用药</span></div>
-        <div class="nav-item" onclick="showView('historyView')">📜<span>记录</span></div>
+        <div class="nav-item" onclick="showView('bindView')">🏷️<span>管理</span></div>
+        <div class="nav-item" onclick="showView('medView')">💊<span>提醒</span></div>
+        <div class="nav-item" onclick="showView('historyView')">📜<span>日志</span></div>
         <div class="nav-item" onclick="showView('userView')">👤<span>我的</span></div>
     </div>
 
     <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
-
     <script type="module">
         import { Cloud } from 'https://cdn.jsdelivr.net/npm/laf-client-sdk@1.0.0/+esm'
 
@@ -127,170 +125,148 @@
         let currentUserName = "";
         const GB2312_MAP = {"一":"D2BB","二":"B6FE","三":"C8FD","四":"CBC4","五":"CEE5","两":"C1BD","粒":"C1A3","片":"C6AC","颗":"BFC1","包":"B0FC","毫":"BAC1","升":"C9FD","次":"B4CE"};
 
-        // MQTT 初始化
+        // MQTT 配置
         const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', { connectTimeout: 5000 });
         client.on('connect', () => {
-            console.log("✅ MQTT Connected");
+            console.log("MQTT Connected");
+            const label = document.getElementById('mqttStatusLabel');
+            if(label) { label.innerText = "● 实时服务: 在线"; label.style.color = "var(--success)"; }
             client.subscribe('medbox/S3/status');
         });
 
-        // 业务函数
+        // 核心逻辑函数
         async function handleRegister() {
             const user = document.getElementById('regUser').value;
             const pass = document.getElementById('regPass').value;
             if(!user || !pass) return alert("请填写完整");
-            await window.cloud.invoke("db-proxy", {
-                action: "add", collection: "users",
-                data: { username: user, password: pass }
-            });
-            alert("账号激活成功！");
-            showView('loginView');
+            try {
+                await window.cloud.invoke("db-proxy", { action: "add", collection: "users", data: { username: user, password: pass } });
+                alert("云端账户激活成功！"); showView('loginView');
+            } catch(e) { alert("注册失败，请检查云函数"); }
         }
 
         async function handleLogin() {
             const user = document.getElementById('loginUser').value;
             const pass = document.getElementById('loginPass').value;
-            const res = await window.cloud.invoke("db-proxy", {
-                action: "get", collection: "users",
-                query: { username: user, password: pass }
-            });
+            const res = await window.cloud.invoke("db-proxy", { action: "get", collection: "users", query: { username: user, password: pass } });
             if(res.data && res.data.length > 0) {
                 currentUserName = user;
                 document.getElementById('displayUserName').innerText = "子女账号: " + user;
-                showView('bindView');
-                fetchCards();
+                showView('medView'); fetchCards();
             } else alert("账号或密码错误");
         }
 
-        async function addCardToCloud() {
-            const uid = document.getElementById('newUid').value.toUpperCase().replace(/[:\s]/g, '');
-            const alias = document.getElementById('newAlias').value;
-            if(!uid || !alias) return alert("信息不全");
-            await window.cloud.invoke("db-proxy", {
-                action: "add", collection: "pill_plans",
-                data: { uid, alias, owner: currentUserName, time: '08:00', lastDate: '', drug: '未设置', dose: '未设置' }
-            });
-            document.getElementById('newUid').value = "";
-            document.getElementById('newAlias').value = "";
-            fetchCards();
-        }
-
-        // 删除卡片功能 (新增)
-        window.deleteCard = async (id) => {
-            if(!confirm("确定要解绑这张卡片吗？硬件端的对应计划将失效。")) return;
-            await window.cloud.invoke("db-proxy", {
-                action: "delete", collection: "pill_plans", id: id
-            });
-            fetchCards();
-        }
-
         async function fetchCards() {
-            const res = await window.cloud.invoke("db-proxy", {
-                action: "get", collection: "pill_plans",
-                query: { owner: currentUserName }
-            });
+            const res = await window.cloud.invoke("db-proxy", { action: "get", collection: "pill_plans", query: { owner: currentUserName } });
             cloudCards = res.data || [];
             renderUI();
         }
 
         function renderUI() {
             const today = new Date().toLocaleDateString();
-            // 渲染绑定列表（带删除按钮）
             document.getElementById('cardListContainer').innerHTML = cloudCards.map(c => `
                 <div class="list-item">
                     <div><b>${c.alias}</b><br><small style="color:var(--gray)">${c.uid}</small></div>
-                    <button class="btn-del" onclick="deleteCard('${c._id}')">解绑</button>
+                    <button style="background:var(--danger); width:auto; padding:5px 10px; font-size:12px;" onclick="deleteCard('${c._id}')">解绑</button>
                 </div>
             `).join('');
 
-            // 渲染首页列表
             document.getElementById('medCardListContainer').innerHTML = cloudCards.map((c, i) => `
                 <div class="list-item" onclick="openEdit(${i}, '${c._id}')">
-                    <div><b>${c.alias}</b><br><small>${c.drug || ''}</small></div>
+                    <div><b>${c.alias}</b><br><small>${c.drug || '未设置'}</small></div>
                     <div style="text-align:right">
                         <span class="status-tag ${c.lastDate === today ? 'taken':'not-taken'}">${c.lastDate === today ? '已服':'待服'}</span><br>
                         <b style="color:var(--primary)">${c.time}</b>
                     </div>
                 </div>
-            `).join('') || '<p style="text-align:center">点击“绑定”添加药盒卡片</p>';
+            `).join('') || '<p style="text-align:center">暂无计划，请先绑定卡片</p>';
         }
 
-        async function saveAndSync() {
+        window.addCardToCloud = async () => {
+            const uid = document.getElementById('newUid').value.toUpperCase().replace(/[:\s]/g, '');
+            const alias = document.getElementById('newAlias').value;
+            if(!uid || !alias) return alert("信息不完整");
+            await window.cloud.invoke("db-proxy", { action: "add", collection: "pill_plans", data: { uid, alias, owner: currentUserName, time: '08:00', lastDate: '', drug: '', dose: '' } });
+            document.getElementById('newUid').value = ""; document.getElementById('newAlias').value = "";
+            fetchCards();
+        }
+
+        window.deleteCard = async (id) => {
+            if(!confirm("确定要解绑吗？")) return;
+            await window.cloud.invoke("db-proxy", { action: "delete", collection: "pill_plans", id: id });
+            fetchCards();
+        }
+
+        window.saveAndSync = async () => {
             const drug = document.getElementById('drugName').value;
             const dose = document.getElementById('drugDose').value;
             const time = document.getElementById('drugTime').value;
-            
             let doseHex = "";
             for(let char of dose) {
                 let hex = (GB2312_MAP[char] || char.charCodeAt(0).toString(16).toUpperCase());
-                if(hex.length % 2 !== 0) hex = "0" + hex; // 16进制补齐
+                if(hex.length % 2 !== 0) hex = "0" + hex;
                 doseHex += hex;
             }
-
-            await window.cloud.invoke("db-proxy", {
-                action: "update", collection: "pill_plans", id: selectedCloudId,
-                data: { drug, dose, time, doseHex }
-            });
-
+            await window.cloud.invoke("db-proxy", { action: "update", collection: "pill_plans", id: selectedCloudId, data: { drug, dose, time, doseHex } });
             if(client.connected) {
                 client.publish('medbox/S3/config', JSON.stringify({
                     idx: selectedIdx, uid: document.getElementById('editUid').value, 
                     drug, dose_hex: doseHex,
                     h: parseInt(time.split(':')[0]), m: parseInt(time.split(':')[1])
                 }), {qos:1});
-                alert("指令已同步至硬件！");
+                alert("设置成功，硬件已更新！");
             }
-            showView('medView');
-            fetchCards();
+            showView('medView'); fetchCards();
         }
 
-        // 导航管理
-        function showView(id) {
+        window.handleLogout = () => { if(confirm("确定退出？")) location.reload(); }
+
+        window.handleDeleteAccount = async () => {
+            if(!confirm("⚠️ 警告：此操作将永久删除您的账户、所有药盒计划及服药记录。确认吗？")) return;
+            const check = prompt("请输入您的用户名确认：");
+            if(check !== currentUserName) return alert("验证失败");
+            
+            try {
+                // 级联删除
+                await window.cloud.invoke("db-proxy", { action: "delete_many", collection: "pill_plans", query: { owner: currentUserName } });
+                await window.cloud.invoke("db-proxy", { action: "delete_many", collection: "med_logs", query: { owner: currentUserName } });
+                await window.cloud.invoke("db-proxy", { action: "delete_many", collection: "users", query: { username: currentUserName } });
+                alert("注销成功，数据已清空。"); location.reload();
+            } catch(e) { alert("注销失败"); }
+        }
+
+        window.showView = (id) => {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(id).classList.add('active');
-            
-            const noNav = ['loginView', 'regView'].includes(id);
-            document.getElementById('navBar').style.display = noNav ? 'none' : 'flex';
-            
-            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-            const idx = {bindView:0, medView:1, historyView:2, userView:3}[id];
-            if(idx !== undefined) document.querySelectorAll('.nav-item')[idx].classList.add('active');
-            
+            document.getElementById('navBar').style.display = ['loginView', 'regView'].includes(id) ? 'none' : 'flex';
             if(id === 'historyView') fetchHistory();
         }
 
         async function fetchHistory() {
-            const res = await window.cloud.invoke("db-proxy", {
-                action: "get", collection: "med_logs", query: { owner: currentUserName }
-            });
+            const res = await window.cloud.invoke("db-proxy", { action: "get", collection: "med_logs", query: { owner: currentUserName } });
             document.getElementById('historyContainer').innerHTML = (res.data || []).reverse().map(l => `
                 <div class="history-item">
                     <span style="color:var(--primary)">${l.time}</span><br>
-                    <b>${l.drug}</b> 服用成功
+                    <b>${l.drug}</b> 服药核验成功
                 </div>
-            `).join('') || '暂无服药记录';
+            `).join('') || '暂无历史';
         }
 
         window.openEdit = (idx, id) => {
-            selectedIdx = idx;
-            selectedCloudId = id;
+            selectedIdx = idx; selectedCloudId = id;
             const c = cloudCards[idx];
             document.getElementById('editUid').value = c.uid;
             document.getElementById('drugName').value = c.drug || "";
             document.getElementById('drugDose').value = c.dose || "";
             document.getElementById('drugTime').value = c.time || "08:00";
             const isTaken = c.lastDate === new Date().toLocaleDateString();
-            document.getElementById('todayStatusBox').innerHTML = `<div class="status-tag ${isTaken?'taken':'not-taken'}" style="width:100%;text-align:center;padding:10px 0;margin-bottom:10px">${isTaken ? '✅ 老人今日已服药' : '❌ 老人今日尚未服药'}</div>`;
+            document.getElementById('todayStatusBox').innerHTML = `<div class="status-tag ${isTaken?'taken':'not-taken'}" style="width:100%;text-align:center;padding:10px 0;">${isTaken?'✅ 今日已服药':'❌ 今日尚未服药'}</div>`;
             showView('configSubView');
         }
 
         window.handleRegister = handleRegister;
         window.handleLogin = handleLogin;
-        window.addCardToCloud = addCardToCloud;
-        window.saveAndSync = saveAndSync;
-        window.showView = showView;
-
-        console.log("🚀 System Ready with CRUD functions");
+        console.log("🚀 System Ready");
     </script>
 </body>
 </html>
