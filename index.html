@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>智能药盒云管家 - 毕设交付版</title>
+    <title>智能药盒云管家 - 交付最终版</title>
     <style>
         :root { --primary: #007AFF; --success: #28CD41; --danger: #FF3B30; --bg: #F2F2F7; --gray: #8e8e93; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); margin: 0; padding-bottom: 90px; }
@@ -24,6 +24,7 @@
         .nav-item { font-size: 22px; flex: 1; text-align: center; cursor: pointer; color: var(--gray); }
         .nav-item span { display: block; font-size: 10px; margin-top: 2px; }
         .nav-item.active { color: var(--primary); }
+        .history-item { border-left: 4px solid var(--primary); padding: 12px 15px; background: #fff; margin-bottom: 10px; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
     </style>
 </head>
 <body>
@@ -87,7 +88,7 @@
         <div id="historyContainer"></div>
     </div>
 
-    <!-- 7. 我的 (注销功能) -->
+    <!-- 7. 我的 -->
     <div id="userView" class="view">
         <div class="card" style="text-align: center; padding: 30px 20px;">
             <div style="font-size: 50px; margin-bottom: 10px;">👤</div>
@@ -125,16 +126,76 @@
         let currentUserName = "";
         const GB2312_MAP = {"一":"D2BB","二":"B6FE","三":"C8FD","四":"CBC4","五":"CEE5","两":"C1BD","粒":"C1A3","片":"C6AC","颗":"BFC1","包":"B0FC","毫":"BAC1","升":"C9FD","次":"B4CE"};
 
-        // MQTT 配置
+        // MQTT 连接与监听
         const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', { connectTimeout: 5000 });
         client.on('connect', () => {
-            console.log("MQTT Connected");
+            console.log("✅ MQTT 服务已连接");
             const label = document.getElementById('mqttStatusLabel');
             if(label) { label.innerText = "● 实时服务: 在线"; label.style.color = "var(--success)"; }
             client.subscribe('medbox/S3/status');
         });
 
-        // 核心逻辑函数
+        client.on('message', (topic, msg) => {
+            try {
+                const data = JSON.parse(msg.toString());
+                console.log("🔔 收到原始 MQTT 消息:", data);
+                // 当收到 type 为 report 的服药成功消息时调用处理函数
+                if(data.type === 'report') handleMedReport(data);
+            } catch(e) { console.log("收到反馈文字:", msg.toString()); }
+        });
+
+        // --- 核心修复：服药记录处理器 ---
+        async function handleMedReport(data) {
+            console.warn("🚀 开始处理硬件服药上报...");
+            if(!currentUserName) {
+                console.error("❌ 处理失败：用户未登录，无法记录到名下");
+                return;
+            }
+
+            try {
+                // 1. 查找匹配的云端卡片（优先UID，其次索引）
+                const target = cloudCards.find(c => c.uid === data.uid) || cloudCards[data.idx];
+                const drugName = data.drug || (target ? target.drug : "未知药物");
+
+                // 2. 存入历史日志 med_logs
+                console.log("正在存入 med_logs...");
+                await window.cloud.invoke("db-proxy", {
+                    action: "add",
+                    collection: "med_logs",
+                    data: {
+                        drug: drugName,
+                        owner: currentUserName,
+                        time: new Date().toLocaleString(),
+                        cardIdx: data.idx
+                    }
+                });
+
+                // 3. 更新该计划的“今日已服”状态 lastDate
+                if(target) {
+                    console.log("正在更新计划 lastDate...");
+                    await window.cloud.invoke("db-proxy", {
+                        action: "update",
+                        collection: "pill_plans",
+                        id: target._id,
+                        data: { lastDate: new Date().toLocaleDateString() }
+                    });
+                }
+
+                console.log("✅ 全链路记录成功！");
+                // 4. 实时刷新列表，让 UI 反馈“已服”
+                fetchCards();
+                
+                // 如果当前正停留在日志页，自动刷新日志
+                if(document.getElementById('historyView').classList.contains('active')) {
+                    fetchHistory();
+                }
+
+            } catch(e) {
+                console.error("❌ 处理服药上报出错:", e);
+            }
+        }
+
+        // 基础功能函数
         async function handleRegister() {
             const user = document.getElementById('regUser').value;
             const pass = document.getElementById('regPass').value;
@@ -142,7 +203,7 @@
             try {
                 await window.cloud.invoke("db-proxy", { action: "add", collection: "users", data: { username: user, password: pass } });
                 alert("云端账户激活成功！"); showView('loginView');
-            } catch(e) { alert("注册失败，请检查云函数"); }
+            } catch(e) { alert("注册失败"); }
         }
 
         async function handleLogin() {
@@ -185,7 +246,7 @@
         window.addCardToCloud = async () => {
             const uid = document.getElementById('newUid').value.toUpperCase().replace(/[:\s]/g, '');
             const alias = document.getElementById('newAlias').value;
-            if(!uid || !alias) return alert("信息不完整");
+            if(!uid || !alias) return alert("信息不全");
             await window.cloud.invoke("db-proxy", { action: "add", collection: "pill_plans", data: { uid, alias, owner: currentUserName, time: '08:00', lastDate: '', drug: '', dose: '' } });
             document.getElementById('newUid').value = ""; document.getElementById('newAlias').value = "";
             fetchCards();
@@ -214,31 +275,35 @@
                     drug, dose_hex: doseHex,
                     h: parseInt(time.split(':')[0]), m: parseInt(time.split(':')[1])
                 }), {qos:1});
-                alert("设置成功，硬件已更新！");
+                alert("指令同步成功！");
             }
             showView('medView'); fetchCards();
         }
 
-        window.handleLogout = () => { if(confirm("确定退出？")) location.reload(); }
+        window.handleLogout = () => { if(confirm("确定退出登录？")) location.reload(); }
 
         window.handleDeleteAccount = async () => {
-            if(!confirm("⚠️ 警告：此操作将永久删除您的账户、所有药盒计划及服药记录。确认吗？")) return;
-            const check = prompt("请输入您的用户名确认：");
+            if(!confirm("⚠️ 注销将彻底清空您的账号、计划与日志。确认？")) return;
+            const check = prompt("请输入用户名确认：");
             if(check !== currentUserName) return alert("验证失败");
-            
             try {
-                // 级联删除
                 await window.cloud.invoke("db-proxy", { action: "delete_many", collection: "pill_plans", query: { owner: currentUserName } });
                 await window.cloud.invoke("db-proxy", { action: "delete_many", collection: "med_logs", query: { owner: currentUserName } });
                 await window.cloud.invoke("db-proxy", { action: "delete_many", collection: "users", query: { username: currentUserName } });
-                alert("注销成功，数据已清空。"); location.reload();
-            } catch(e) { alert("注销失败"); }
+                alert("注销成功"); location.reload();
+            } catch(e) { alert("操作失败"); }
         }
 
         window.showView = (id) => {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(id).classList.add('active');
             document.getElementById('navBar').style.display = ['loginView', 'regView'].includes(id) ? 'none' : 'flex';
+            
+            // 切换导航高亮
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            const map = {bindView:0, medView:1, historyView:2, userView:3};
+            if(map[id] !== undefined) document.querySelectorAll('.nav-item')[map[id]].classList.add('active');
+            
             if(id === 'historyView') fetchHistory();
         }
 
@@ -249,7 +314,7 @@
                     <span style="color:var(--primary)">${l.time}</span><br>
                     <b>${l.drug}</b> 服药核验成功
                 </div>
-            `).join('') || '暂无历史';
+            `).join('') || '<p style="text-align:center; color:var(--gray);">暂无服药历史记录</p>';
         }
 
         window.openEdit = (idx, id) => {
@@ -260,13 +325,18 @@
             document.getElementById('drugDose').value = c.dose || "";
             document.getElementById('drugTime').value = c.time || "08:00";
             const isTaken = c.lastDate === new Date().toLocaleDateString();
-            document.getElementById('todayStatusBox').innerHTML = `<div class="status-tag ${isTaken?'taken':'not-taken'}" style="width:100%;text-align:center;padding:10px 0;">${isTaken?'✅ 今日已服药':'❌ 今日尚未服药'}</div>`;
+            document.getElementById('todayStatusBox').innerHTML = `
+                <div class="status-tag ${isTaken?'taken':'not-taken'}" style="width:100%;text-align:center;padding:10px 0;">
+                    ${isTaken ? '✅ 今日已服药' : '❌ 今日尚未服药'}
+                </div>`;
             showView('configSubView');
         }
 
+        // 暴露函数
         window.handleRegister = handleRegister;
         window.handleLogin = handleLogin;
-        console.log("🚀 System Ready");
+        window.deleteCard = deleteCard;
+        console.log("🚀 System V2.1 Ready");
     </script>
 </body>
 </html>
