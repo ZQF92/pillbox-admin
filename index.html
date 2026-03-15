@@ -4,7 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>智能药盒云管家 - Laf云函数版</title>
+    <!-- 1. 这是一个黑科技：手动定义一个 exports 对象，防止报错 -->
+    <script>
+        var exports = {}; 
+    </script>
+
+    <!-- 2. 引入你刚刚上传的那个 CommonJS 格式的 laf.js -->
     <script src="./laf.js"></script>
+
+    <!-- 3. 另一个黑科技：将 exports 里的内容转移给 laf 变量 -->
+    <script>
+        var laf = exports;
+        console.log("🚀 成功拦截 exports 并映射给 laf 变量");
+    </script>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root { --primary: #007AFF; --success: #28CD41; --danger: #FF3B30; --bg: #F2F2F7; }
