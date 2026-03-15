@@ -220,7 +220,10 @@
             
             let doseHex = "";
             for(let char of dose) {
-                doseHex += (GB2312_MAP[char] || char.charCodeAt(0).toString(16).toUpperCase());
+                let hex = (GB2312_MAP[char] || char.charCodeAt(0).toString(16).toUpperCase());
+                // 关键修正：确保每一项都是偶数长度（补0）
+                if(hex.length % 2 !== 0) hex = "0" + hex; 
+                doseHex += hex;
             }
 
             // 更新云端记录
