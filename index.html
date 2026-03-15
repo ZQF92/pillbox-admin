@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>智能药盒远程管家系统</title>
+    <title>智能药盒云管家 - Laf云函数版</title>
+    <script src="https://unpkg.com/laf-client-sdk@latest/dist/index.min.js"></script>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root { --primary: #007AFF; --success: #28CD41; --danger: #FF3B30; --bg: #F2F2F7; }
@@ -16,310 +17,243 @@
         input { width: 100%; padding: 14px; margin: 8px 0; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 16px; outline: none; }
         button { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 17px; font-weight: bold; cursor: pointer; margin-top: 10px; }
         button.secondary { background: #8e8e93; }
-        button.danger { background: var(--danger); }
-        
-        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: white; border-radius: 12px; margin-bottom: 10px; cursor: pointer; border: 1px solid #eee; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: white; border-radius: 12px; margin-bottom: 10px; border: 1px solid #eee; }
         .status-tag { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; }
         .taken { background: #E2F9E1; color: var(--success); }
         .not-taken { background: #FFE5E5; color: var(--danger); }
-
         .nav-bar { background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); padding: 12px; display: none; justify-content: space-around; position: fixed; bottom: 0; width: 100%; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000; }
-        .nav-item { font-size: 11px; color: #8e8e93; text-align: center; flex: 1; cursor: pointer; }
+        .nav-item { font-size: 11px; flex: 1; text-align: center; cursor: pointer; color: #8e8e93; }
         .nav-item.active { color: var(--primary); }
-        .nav-icon { font-size: 20px; display: block; margin-bottom: 3px; }
-
-        .history-item { border-left: 4px solid var(--primary); padding: 10px 15px; background: #fff; margin-bottom: 10px; border-radius: 0 10px 10px 0; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .history-time { color: var(--primary); font-weight: bold; }
+        .history-item { border-left: 4px solid var(--primary); padding: 10px 15px; background: #fff; margin-bottom: 10px; font-size: 14px; }
     </style>
 </head>
 <body>
 
-    <!-- 1. 登录页面 -->
+    <!-- 1. 登录 -->
     <div id="loginView" class="view active">
         <div class="card" style="margin-top:50px">
-            <h2>🔐 用户登录</h2>
-            <input type="text" id="loginUser" placeholder="账户名">
+            <h2>🔐 药盒账户登录</h2>
+            <input type="text" id="loginUser" placeholder="用户名">
             <input type="password" id="loginPass" placeholder="密码">
             <button onclick="handleLogin()">登 录</button>
-            <p style="text-align:center; font-size:14px">
-                <a href="#" onclick="showView('regView')">立即注册</a> | 
-                <a href="#" onclick="showView('resetView')">忘记密码</a>
-            </p>
+            <p style="text-align:center; font-size:14px"><a href="#" onclick="showView('regView')">新用户注册</a></p>
         </div>
     </div>
 
-    <!-- 2. 注册页面 -->
+    <!-- 2. 注册 -->
     <div id="regView" class="view">
         <div class="card">
-            <h2>📝 新用户注册</h2>
-            <input type="text" id="regUser" placeholder="账户名">
-            <input type="password" id="regPass" placeholder="设置密码">
-            <button onclick="handleRegister()">注 册</button>
-            <button class="secondary" onclick="showView('loginView')">返回登录</button>
+            <h2>📝 注册云端账户</h2>
+            <input type="text" id="regUser" placeholder="用户名">
+            <input type="password" id="regPass" placeholder="密码">
+            <button onclick="handleRegister()">开启云端数据库</button>
         </div>
     </div>
 
-    <!-- 3. 重置密码页面 -->
-    <div id="resetView" class="view">
-        <div class="card">
-            <h2>🔄 重置密码</h2>
-            <label>账户名</label><input type="text" id="resetUser">
-            <label>新密码</label><input type="password" id="newPass">
-            <button onclick="handleReset()">确认重置</button>
-            <button class="secondary" onclick="showView('loginView')">取消</button>
-        </div>
-    </div>
-
-    <!-- 4. NFC卡绑定页面 -->
+    <!-- 3. 卡片绑定 -->
     <div id="bindView" class="view">
-        <h2>🏷️ 卡片资产绑定</h2>
+        <h2>🏷️ 卡片云端绑定</h2>
         <div class="card">
-            <label>卡片 UID (通过 NFC Tools 获取)</label>
-            <input type="text" id="newUid" placeholder="如: 41DCBA06">
-            <label>卡片别名</label>
-            <input type="text" id="newCardName" placeholder="如: NFC卡1">
-            <button onclick="addCard()">立即绑定</button>
+            <input type="text" id="newUid" placeholder="UID (如: 41DCBA06)">
+            <input type="text" id="newAlias" placeholder="起个名 (如: 爷爷的药盒1)">
+            <button onclick="addCardToCloud()">保存到服务器</button>
         </div>
         <div id="cardListContainer"></div>
     </div>
 
-    <!-- 5. 用药提醒列表页面 -->
+    <!-- 4. 用药列表 -->
     <div id="medView" class="view">
-        <h2>💊 用药提醒设置</h2>
+        <h2>💊 实时用药提醒</h2>
         <div id="medCardListContainer"></div>
     </div>
 
-    <!-- 6. 药品计划详情页 -->
+    <!-- 5. 详情设置 (修复了 selectedCloudId 报错) -->
     <div id="configSubView" class="view">
         <div class="card">
             <h2 id="configTitle">设置详情</h2>
             <div id="todayStatusBox"></div>
-            <label>绑定的卡片 ID</label><input type="text" id="editUid" readonly style="background:#eee">
-            <label>药品名称</label><input type="text" id="drugName" placeholder="例如：降压药">
-            <label>单次用量</label><input type="text" id="drugDose" placeholder="例如：一粒">
+            <label>卡片 UID</label><input type="text" id="editUid" readonly style="background:#eee">
+            <label>药品名称</label><input type="text" id="drugName">
+            <label>用药量</label><input type="text" id="drugDose">
             <label>提醒时间</label><input type="time" id="drugTime">
-            <button onclick="syncToHardware()">智能药盒同步成功</button>
-            <button class="secondary" onclick="showView('medView')">返回列表</button>
+            <button onclick="saveAndSync()">保存云端并同步硬件</button>
+            <button class="secondary" onclick="showView('medView')">返回</button>
         </div>
     </div>
 
-    <!-- 7. 历史记录页面 -->
+    <!-- 6. 历史记录 -->
     <div id="historyView" class="view">
-        <h2>📜 用药记录查询</h2>
+        <h2>📜 服务器服药记录</h2>
         <div id="historyContainer"></div>
-        <button class="secondary" onclick="clearHistory()">清空所有记录</button>
     </div>
 
-    <!-- 底部导航栏 -->
+    <!-- 底部导航 -->
     <div id="navBar" class="nav-bar">
-        <div class="nav-item" onclick="showView('bindView')"><span class="nav-icon">🏷️</span>绑定</div>
-        <div class="nav-item" onclick="showView('medView')"><span class="nav-icon">💊</span>用药</div>
-        <div class="nav-item" onclick="showView('historyView')"><span class="nav-icon">📜</span>记录</div>
-        <div class="nav-item" onclick="logout()"><span class="nav-icon">🚪</span>退出</div>
+        <div class="nav-item" onclick="showView('bindView')">🏷️绑定</div>
+        <div class="nav-item" onclick="showView('medView')">💊用药</div>
+        <div class="nav-item" onclick="showView('historyView')">📜记录</div>
+        <div class="nav-item" onclick="location.reload()">🚪退出</div>
     </div>
 
 <script>
-    // --- GB2312 转码引擎（解决播报乱码的关键） ---
-    const GB2312_MAP = {
-        "一":"D2BB","二":"B6FE","三":"C8FD","四":"CBC4","五":"CEE5","六":"C1F9","七":"C6DF","八":"B0CB","九":"BEE5","十":"CABF",
-        "两":"C1BD","粒":"C1A3","片":"C6AC","包":"B0FC","克":"BFCB","毫":"BAC1","升":"C9FD","次":"B4CE","颗":"BFC1","口":"BFDA",
-        "袋":"B4FC","瓶":"C6BF","支":"D6A7","顿":"B6D9","个":"B8F6"
-    };
+    // --- 1. 初始化 Laf (请确认 AppID 为 m14yuhwtlw) ---
+    const cloud = new laf.Cloud({
+        baseUrl: "https://m14yuhwtlw.bja.sealos.run",
+        getAccessToken: () => localStorage.getItem("access_token")
+    });
 
-    function encodeToGB2312Hex(text) {
-        let hex = "";
-        for(let char of text) {
-            if(GB2312_MAP[char]) hex += GB2312_MAP[char];
-            else if(/[a-zA-Z0-9]/.test(char)) hex += char.charCodeAt(0).toString(16).toUpperCase();
-        }
-        return hex;
-    }
+    // 统一声明全局变量，解决重复声明报错
+    let selectedCloudId = ""; 
+    let selectedIdx = 0;      
+    let cloudCards = [];      
+    let currentUserName = "";
 
-    // --- 数据持久化 ---
-    let cards = JSON.parse(localStorage.getItem('med_cards_v4')) || [];
-    let logs = JSON.parse(localStorage.getItem('med_logs_v4')) || [];
-    let selectedIdx = -1;
+    const GB2312_MAP = {"一":"D2BB","二":"B6FE","三":"C8FD","四":"CBC4","五":"CEE5","两":"C1BD","粒":"C1A3","片":"C6AC","颗":"BFC1","包":"B0FC","毫":"BAC1","升":"C9FD","次":"B4CE"};
 
-    // --- MQTT 配置 ---
+    // --- 2. MQTT 配置 ---
     const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
     client.on('connect', () => client.subscribe('medbox/S3/status'));
     client.on('message', (topic, msg) => {
         try {
             const data = JSON.parse(msg.toString());
-            if(data.type === 'report') handleHardwareReport(data);
-        } catch(e) { console.log("收到原始消息:", msg.toString()); }
+            if(data.type === 'report') handleMedReport(data);
+        } catch(e) { console.log("收到文字反馈:", msg.toString()); }
     });
 
-    // --- 处理硬件上报服药记录 ---
-    function handleHardwareReport(data) {
-        const now = new Date();
-        const dateStr = now.toLocaleDateString();
-        const timeStr = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
+    // --- 3. 核心业务逻辑 (全部改用云函数 db-proxy) ---
 
-        if(cards[data.idx]) {
-            cards[data.idx].lastTakenDate = dateStr;
-            saveData();
-        }
-
-        logs.unshift({
-            time: dateStr + " " + timeStr,
-            drug: data.drug,
-            cardAlias: cards[data.idx] ? cards[data.idx].alias : "未知卡片"
+    async function handleRegister() {
+        await cloud.invoke("db-proxy", {
+            action: "add", collection: "users",
+            data: { username: regUser.value, password: regPass.value }
         });
-        localStorage.setItem('med_logs_v4', JSON.stringify(logs));
-
-        alert(`🔔 提醒：老人已于 ${timeStr} 服用 ${data.drug}`);
-        
-        // 实时刷新页面
-        const activeView = document.querySelector('.view.active').id;
-        if(activeView === 'medView') renderMedList();
-        if(activeView === 'historyView') renderHistory();
-        if(activeView === 'configSubView') renderTodayStatus();
+        alert("云数据库账户注册成功！"); showView('loginView');
     }
 
-    // --- 页面路由逻辑 ---
-    function showView(id) {
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-        const isAuthView = ['loginView','regView','resetView'].includes(id);
-        document.getElementById('navBar').style.display = isAuthView ? 'none' : 'flex';
-        
-        if(id === 'bindView') renderBindList();
-        if(id === 'medView') renderMedList();
-        if(id === 'historyView') renderHistory();
+    async function handleLogin() {
+        const res = await cloud.invoke("db-proxy", {
+            action: "get", collection: "users",
+            query: { username: loginUser.value, password: loginPass.value }
+        });
+        if(res.data && res.data.length > 0) {
+            currentUserName = loginUser.value;
+            showView('bindView');
+        } else alert("账户名或密码错误");
     }
 
-    // --- 用户管理 ---
-    function handleRegister() {
-        const u = document.getElementById('regUser').value;
-        const p = document.getElementById('regPass').value;
-        if(!u || !p) return alert("请完整填写");
-        localStorage.setItem('user_auth_' + u, p);
-        alert("注册成功！"); showView('loginView');
-    }
-    function handleLogin() {
-        const u = document.getElementById('loginUser').value;
-        const p = document.getElementById('loginPass').value;
-        if(localStorage.getItem('user_auth_' + u) === p && p !== null) { showView('bindView'); }
-        else alert("账号或密码错误");
-    }
-    function handleReset() {
-        const u = document.getElementById('resetUser').value;
-        const p = document.getElementById('newPass').value;
-        if(localStorage.getItem('user_auth_' + u)) {
-            localStorage.setItem('user_auth_' + u, p);
-            alert("修改成功"); showView('loginView');
-        } else alert("账号不存在");
+    async function addCardToCloud() {
+        await cloud.invoke("db-proxy", {
+            action: "add", collection: "pill_plans",
+            data: {
+                uid: newUid.value.toUpperCase().replace(/[:\s]/g, ''),
+                alias: newAlias.value,
+                owner: currentUserName,
+                time: '08:00',
+                lastDate: ''
+            }
+        });
+        alert("已保存到 Laf 服务器集合"); fetchCards();
     }
 
-    // --- 卡片绑定管理 ---
-    function addCard() {
-        const uid = document.getElementById('newUid').value.replace(/[:\s]/g, '').toUpperCase();
-        const alias = document.getElementById('newCardName').value;
-        if(uid.length < 4 || !alias) return alert("UID或别名不能为空");
-        if(cards.length >= 5) return alert("最多支持5个药盒");
-        
-        cards.push({ uid, alias, drug: '', dose: '', time: '08:00', lastTakenDate: '' });
-        saveData(); renderBindList();
-        document.getElementById('newUid').value = ''; document.getElementById('newCardName').value = '';
+    async function fetchCards() {
+        const res = await cloud.invoke("db-proxy", {
+            action: "get", collection: "pill_plans",
+            query: { owner: currentUserName }
+        });
+        cloudCards = res.data;
+        renderUI();
     }
 
-    function renderBindList() {
-        const container = document.getElementById('cardListContainer');
-        container.innerHTML = cards.map((c, i) => `
-            <div class="list-item">
-                <div><b>${c.alias}</b><br><small style="color:#888">UID: ${c.uid}</small></div>
-                <button class="danger" style="width:70px; padding:8px" onclick="deleteCard(${i})">删除</button>
-            </div>
-        `).join('') || '<p style="text-align:center; color:#888">点击上方开始绑定第一张卡</p>';
-    }
+    function renderUI() {
+        const today = new Date().toLocaleDateString();
+        cardListContainer.innerHTML = cloudCards.map(c => `
+            <div class="list-item"><b>${c.alias}</b> <span>${c.uid}</span></div>
+        `).join('');
 
-    function deleteCard(i) { if(confirm("确定删除吗？")) { cards.splice(i,1); saveData(); renderBindList(); } }
-
-    // --- 用药设置与同步 ---
-    function isTakenToday(card) { return card.lastTakenDate === new Date().toLocaleDateString(); }
-
-    function renderMedList() {
-        const container = document.getElementById('medCardListContainer');
-        container.innerHTML = cards.map((c, i) => `
-            <div class="list-item" onclick="openEdit(${i})">
-                <div>
-                    <b>${c.alias}</b><br>
-                    <span style="font-size:14px; color:#555">${c.drug || '尚未配置药品'}</span>
-                </div>
+        medCardListContainer.innerHTML = cloudCards.map((c, i) => `
+            <div class="list-item" onclick="openEdit(${i}, '${c._id}')">
+                <b>${c.alias}</b>
                 <div style="text-align:right">
-                    <span class="status-tag ${isTakenToday(c) ? 'taken' : 'not-taken'}">${isTakenToday(c) ? '已服' : '待服'}</span><br>
-                    <span style="color:var(--primary); font-weight:bold">${c.time}</span>
+                    <span class="status-tag ${c.lastDate === today ? 'taken':'not-taken'}">${c.lastDate === today ? '已服':'待服'}</span><br>
+                    <b style="color:var(--primary)">${c.time}</b>
                 </div>
             </div>
-        `).join('') || '<p style="text-align:center; color:#888">请先前往“绑定”页添加卡片</p>';
+        `).join('') || '<p style="text-align:center">请先绑定卡片</p>';
     }
 
-    function renderTodayStatus() {
-        const taken = isTakenToday(cards[selectedIdx]);
-        document.getElementById('todayStatusBox').innerHTML = `
-            <div class="status-tag ${taken ? 'taken' : 'not-taken'}" style="width:100%; text-align:center; margin-bottom:15px; padding:10px 0">
-                ${taken ? '✅ 今日服药已确认' : '❌ 今日尚未服药'}
-            </div>
-        `;
-    }
-
-    function openEdit(i) {
-        selectedIdx = i;
-        const c = cards[i];
-        document.getElementById('configTitle').innerText = "管理: " + c.alias;
+    function openEdit(idx, id) {
+        selectedIdx = idx;
+        selectedCloudId = id; // 直接赋值
+        const c = cloudCards[idx];
         document.getElementById('editUid').value = c.uid;
-        document.getElementById('drugName').value = c.drug;
-        document.getElementById('drugDose').value = c.dose;
-        document.getElementById('drugTime').value = c.time;
-        renderTodayStatus();
+        document.getElementById('drugName').value = c.drug || "";
+        document.getElementById('drugDose').value = c.dose || "";
+        document.getElementById('drugTime').value = c.time || "08:00";
+        
+        const isTaken = c.lastDate === new Date().toLocaleDateString();
+        document.getElementById('todayStatusBox').innerHTML = `
+            <div class="status-tag ${isTaken?'taken':'not-taken'}" style="width:100%;text-align:center;padding:10px 0;margin-bottom:10px">
+                ${isTaken ? '✅ 老人今日已服药' : '❌ 老人今日尚未服药'}
+            </div>`;
         showView('configSubView');
     }
 
-    function syncToHardware() {
-        const drug = document.getElementById('drugName').value;
-        const dose = document.getElementById('drugDose').value;
-        const time = document.getElementById('drugTime').value;
+    async function saveAndSync() {
+        const drug = drugName.value; const dose = drugDose.value; const time = drugTime.value;
+        let doseHex = "";
+        for(let char of dose) doseHex += (GB2312_MAP[char] || char.charCodeAt(0).toString(16).toUpperCase());
 
-        if(!drug || !dose) return alert("请补充完整用药信息");
-
-        // 核心步骤：转码用量
-        const doseHex = encodeToGB2312Hex(dose);
-
-        cards[selectedIdx].drug = drug;
-        cards[selectedIdx].dose = dose;
-        cards[selectedIdx].time = time;
-        saveData();
-
-        const [h, m] = time.split(':').map(Number);
-        const payload = JSON.stringify({
-            idx: selectedIdx,
-            uid: cards[selectedIdx].uid,
-            drug: drug,
-            dose_hex: doseHex, // 发送转码后的十六进制
-            h: h, m: m
+        // 通过云函数更新
+        await cloud.invoke("db-proxy", {
+            action: "update", collection: "pill_plans", id: selectedCloudId,
+            data: { drug, dose, time, doseHex }
         });
 
-        client.publish('medbox/S3/config', payload, { qos: 1 });
+        client.publish('medbox/S3/config', JSON.stringify({
+            idx: selectedIdx, uid: editUid.value, drug, dose_hex: doseHex,
+            h: parseInt(time.split(':')[0]), m: parseInt(time.split(':')[1])
+        }), {qos:1});
+        
         alert("智能药盒同步成功！");
         showView('medView');
     }
 
-    // --- 历史记录 ---
-    function renderHistory() {
-        const container = document.getElementById('historyContainer');
-        container.innerHTML = logs.map(l => `
-            <div class="history-item">
-                <span class="history-time">[${l.time}]</span><br>
-                <span>老人刷卡确认：<b>${l.drug}</b> (${l.cardAlias})</span>
-            </div>
-        `).join('') || '<p style="text-align:center; color:#888">暂无用药记录</p>';
+    async function handleMedReport(data) {
+        // 1. 存入历史记录
+        await cloud.invoke("db-proxy", {
+            action: "add", collection: "med_logs",
+            data: { drug: data.drug, owner: currentUserName, time: new Date().toLocaleString() }
+        });
+        // 2. 更新服药计划状态
+        const target = cloudCards[data.idx];
+        if(target) {
+            await cloud.invoke("db-proxy", {
+                action: "update", collection: "pill_plans", id: target._id,
+                data: { lastDate: new Date().toLocaleDateString() }
+            });
+        }
+        alert("🔔 云上报：检测到老人成功服药 " + data.drug);
+        fetchCards();
     }
 
-    function saveData() { localStorage.setItem('med_cards_v4', JSON.stringify(cards)); }
-    function clearHistory() { if(confirm("清空历史记录？")){ logs=[]; localStorage.setItem('med_logs_v4','[]'); renderHistory(); }}
-    function logout() { showView('loginView'); }
-    function logout() { location.reload(); } // 彻底退出清空当前内存
+    async function fetchHistory() {
+        const res = await cloud.invoke("db-proxy", {
+            action: "get_history", collection: "med_logs",
+            query: { owner: currentUserName }
+        });
+        historyContainer.innerHTML = (res.data || []).map(l => `
+            <div class="history-item">
+                <span style="color:var(--primary)">${l.time}</span><br>
+                <b>${l.drug}</b> 核验成功
+            </div>
+        `).join('') || '暂无历史记录';
+    }
+
+    function showView(id) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        document.getElementById('navBar').style.display = ['loginView','regView'].includes(id)?'none':'flex';
+    }
 </script>
 </body>
 </html>
