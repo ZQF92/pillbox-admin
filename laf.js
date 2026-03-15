@@ -3,17 +3,49 @@ function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
 Object.defineProperty(exports, "__esModule", { value: true });
-const index_1 = require("./index");
-__export(require("./index"));
-// 此行是为了运行测试用例时， 报 window undefined 使用；
-// 如果浏览器环境因此报错， 需要注释掉本行；
-// var window: any
-if (window) {
-    window['LafClient'] = {
-        initLessClient: index_1.init,
-        Cloud: index_1.Cloud,
-        Db: index_1.Db,
-        EnvironmentType: index_1.EnvironmentType,
+/**
+ * set `globalThis` trickily
+ */
+;
+((t) => {
+    function setGlobalThis() {
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        const globalObj = this;
+        globalObj.globalThis = globalObj;
+        // @ts-ignore
+        delete t.prototype._T_;
+    }
+    if (typeof globalThis !== 'object') {
+        if (this) {
+            setGlobalThis();
+        }
+        else {
+            Object.defineProperty(t.prototype, '_T_', {
+                configurable: true,
+                get: setGlobalThis,
+            });
+            // @ts-ignore
+            _T_;
+        }
+    }
+})(Object);
+/**
+ * hack `process` missing for wechat miniprogram
+ */
+if (globalThis.wx && !globalThis.process) {
+    ;
+    globalThis.process = {
+        env: {},
     };
+    console.info('hacked for `process` missing for wechat miniprogram');
 }
-//# sourceMappingURL=index-bundle.js.map
+const cloud_1 = require("./cloud");
+exports.Cloud = cloud_1.Cloud;
+exports.Db = cloud_1.Db;
+__export(require("./request"));
+__export(require("./types"));
+function init(config) {
+    return new cloud_1.Cloud(config);
+}
+exports.init = init;
+//# sourceMappingURL=index.js.map
