@@ -283,32 +283,32 @@
         window.handleLogout = () => { if(confirm("确定退出登录？")) location.reload(); }
 
         window.handleDeleteAccount = async () => {
-            if(!currentUserName) return alert("状态异常，请重新登录");
+            if(!currentUserName) return alert("状态异常");
 
-            // 1. 严格确认
-            if(!confirm("⚠️ 警告：系统将严格根据用户名 [" + currentUserName + "] 进行销毁。所有关联的服药日志将被永久删除。确认继续？")) return;
+            if(!confirm("⚠️ 严格注销提示：系统将精确匹配用户名 [" + currentUserName + "] 并销毁其所有服药历史。确认？")) return;
             
-            const verify = prompt("请输入精确的用户名 [" + currentUserName + "] 确认注销：");
+            const verify = prompt("请输入精确的用户名 [" + currentUserName + "] 以执行强制注销：");
             if(verify !== currentUserName) {
-                alert("输入不匹配（请注意大小写），操作已取消。");
+                alert("输入不匹配（区分大小写），注销已取消。");
                 return;
             }
 
             try {
                 const res = await window.cloud.invoke("db-proxy", { 
                     action: "delete_user_all", 
-                    query: { username: currentUserName } // 这里直接传递，不区分大小写
+                    query: { username: currentUserName } 
                 });
 
                 if(res.status === 'success') {
                     const d = res.details;
-                    alert(`注销成功！\n共清理历史日志: ${d.logs} 条\n清理配置计划: ${d.plans} 个。`);
+                    // 反馈删除的具体数量
+                    alert(`注销成功！\n共深度清理历史记录: ${d.logs} 条\n清理配置计划: ${d.plans} 个。`);
                     location.reload();
                 } else {
                     alert("注销失败: " + res.message);
                 }
             } catch(e) {
-                alert("网络请求失败，请稍后重试");
+                alert("网络超时，请检查 Laf 云函数运行日志");
             }
         }
 
