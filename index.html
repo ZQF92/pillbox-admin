@@ -283,16 +283,35 @@
         window.handleLogout = () => { if(confirm("确定退出登录？")) location.reload(); }
 
         window.handleDeleteAccount = async () => {
-            if(!confirm("⚠️ 注销将彻底清空您的账号、计划与日志。确认？")) return;
-            const check = prompt("请输入用户名确认：");
-            if(check !== currentUserName) return alert("验证失败");
-            try {
-                await window.cloud.invoke("db-proxy", { action: "delete_many", collection: "pill_plans", query: { owner: currentUserName } });
-                await window.cloud.invoke("db-proxy", { action: "delete_many", collection: "med_logs", query: { owner: currentUserName } });
-                await window.cloud.invoke("db-proxy", { action: "delete_many", collection: "users", query: { username: currentUserName } });
-                alert("注销成功"); location.reload();
-            } catch(e) { alert("操作失败"); }
+    // 第一步：二次确认，防止误触
+    if(!confirm("⚠️ 警告：注销将永久抹除您的账户、绑定的卡片信息以及所有服药历史记录，且无法恢复。确认继续？")) return;
+    
+    // 第二步：输入用户名进行身份二次校验
+    const check = prompt("为了您的数据安全，请输入您的用户名以确认注销：");
+    if(check !== currentUserName) {
+        alert("验证失败，注销请求已取消。");
+        return;
+    }
+
+    try {
+        // 第三步：调用云端的一键注销接口
+        const res = await window.cloud.invoke("db-proxy", { 
+            action: "delete_user_all", 
+            query: { username: currentUserName } 
+        });
+
+        if(res.status === 'success') {
+            console.log("销毁详情:", res.deleted_counts);
+            alert("账号及关联数据已全部销毁，系统将自动退出。");
+            location.reload(); // 刷新页面回到登录页
+        } else {
+            alert("注销失败：" + (res.message || "未知原因"));
         }
+    } catch(e) {
+            console.error("注销操作异常:", e);
+            alert("网络请求失败，请稍后重试。");
+        }
+    }
 
         window.showView = (id) => {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
