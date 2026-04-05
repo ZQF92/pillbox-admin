@@ -283,40 +283,32 @@
         window.handleLogout = () => { if(confirm("确定退出登录？")) location.reload(); }
 
         window.handleDeleteAccount = async () => {
-            // 调试：先确认当前用户名是什么
-            console.log("准备注销的用户是:", currentUserName);
+            if(!currentUserName) return alert("状态异常，请重新登录");
+
+            // 1. 严格确认
+            if(!confirm("⚠️ 警告：系统将严格根据用户名 [" + currentUserName + "] 进行销毁。所有关联的服药日志将被永久删除。确认继续？")) return;
             
-            if(!currentUserName) {
-                alert("错误：当前未获取到登录状态，请重新登录后再试");
+            const verify = prompt("请输入精确的用户名 [" + currentUserName + "] 确认注销：");
+            if(verify !== currentUserName) {
+                alert("输入不匹配（请注意大小写），操作已取消。");
                 return;
             }
-
-            if(!confirm("⚠️ 确认要抹除账户 " + currentUserName + " 的所有数据吗？")) return;
-            const check = prompt("请输入用户名 " + currentUserName + " 确认：");
-            if(check !== currentUserName) return alert("校验失败");
 
             try {
                 const res = await window.cloud.invoke("db-proxy", { 
                     action: "delete_user_all", 
-                    query: { username: currentUserName } // 确保键名是 username
+                    query: { username: currentUserName } // 这里直接传递，不区分大小写
                 });
 
-                console.log("服务器返回结果:", res);
-
                 if(res.status === 'success') {
-                    // 如果返回的 deleted 数量都是 0，说明数据库里字段名写错了
-                    const d = res.deleted_info;
-                    if(d.user === 0 && d.plans === 0) {
-                        alert("警告：注销指令已执行，但数据库未找到匹配数据。请检查数据库字段名是否为 username 和 owner。");
-                    } else {
-                        alert("注销成功！已清除 " + d.logs + " 条记录。");
-                    }
+                    const d = res.details;
+                    alert(`注销成功！\n共清理历史日志: ${d.logs} 条\n清理配置计划: ${d.plans} 个。`);
                     location.reload();
                 } else {
-                    alert("错误: " + res.message);
+                    alert("注销失败: " + res.message);
                 }
             } catch(e) {
-                alert("网络请求失败");
+                alert("网络请求失败，请稍后重试");
             }
         }
 
