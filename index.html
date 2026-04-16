@@ -1,3 +1,5 @@
+--- START OF FILE index.html ---
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -36,7 +38,10 @@
             <input type="text" id="loginUser" placeholder="用户名">
             <input type="password" id="loginPass" placeholder="密码">
             <button onclick="handleLogin()">登 录</button>
-            <p style="text-align:center; font-size:14px"><a href="#" onclick="showView('regView')">新用户注册</a></p>
+            <div style="display:flex; justify-content: space-between; margin-top:15px; font-size:14px;">
+                <a href="#" onclick="showView('forgotView')" style="color:var(--gray); text-decoration:none;">忘记密码？</a>
+                <a href="#" onclick="showView('regView')" style="color:var(--primary); text-decoration:none;">新用户注册</a>
+            </div>
         </div>
     </div>
 
@@ -44,9 +49,21 @@
     <div id="regView" class="view">
         <div class="card">
             <h2>📝 注册云端账户</h2>
-            <input type="text" id="regUser" placeholder="用户名">
-            <input type="password" id="regPass" placeholder="密码">
+            <input type="text" id="regUser" placeholder="设置用户名">
+            <input type="password" id="regPass" placeholder="设置密码">
             <button onclick="handleRegister()">开启云端数据库</button>
+            <p style="text-align:center; font-size:14px"><a href="#" onclick="showView('loginView')">返回登录</a></p>
+        </div>
+    </div>
+
+    <!-- 新增：忘记密码 -->
+    <div id="forgotView" class="view">
+        <div class="card">
+            <h2>🔑 重置密码</h2>
+            <p style="font-size:12px; color:var(--gray); text-align:center; margin-bottom:15px;">请输入您的用户名以找回并重置密码</p>
+            <input type="text" id="forgotUser" placeholder="用户名">
+            <input type="password" id="forgotPass" placeholder="设置新密码">
+            <button onclick="handleResetPassword()">重置并登录</button>
             <p style="text-align:center; font-size:14px"><a href="#" onclick="showView('loginView')">返回登录</a></p>
         </div>
     </div>
@@ -126,10 +143,9 @@
         let currentUserName = "";
         const GB2312_MAP = {"一":"D2BB","二":"B6FE","三":"C8FD","四":"CBC4","五":"CEE5","两":"C1BD","粒":"C1A3","片":"C6AC","颗":"BFC1","包":"B0FC","毫":"BAC1","升":"C9FD","次":"B4CE"};
 
-        // MQTT 连接与监听
+        // MQTT 连接保持不变...
         const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', { connectTimeout: 5000 });
         client.on('connect', () => {
-            console.log("✅ MQTT 服务已连接");
             const label = document.getElementById('mqttStatusLabel');
             if(label) { label.innerText = "● 实时服务: 在线"; label.style.color = "var(--success)"; }
             client.subscribe('medbox/S3/status');
@@ -138,77 +154,60 @@
         client.on('message', (topic, msg) => {
             try {
                 const data = JSON.parse(msg.toString());
-                console.log("🔔 收到原始 MQTT 消息:", data);
-                // 当收到 type 为 report 的服药成功消息时调用处理函数
                 if(data.type === 'report') handleMedReport(data);
-            } catch(e) { console.log("收到反馈文字:", msg.toString()); }
+            } catch(e) { }
         });
 
-        // --- 核心修复：服药记录处理器 ---
-        async function handleMedReport(data) {
-            console.warn("🚀 开始处理硬件服药上报...");
-            if(!currentUserName) {
-                console.error("❌ 处理失败：用户未登录，无法记录到名下");
-                return;
-            }
+        // 重置密码逻辑
+        window.handleResetPassword = async () => {
+            const user = document.getElementById('forgotUser').value;
+            const newPass = document.getElementById('forgotPass').value;
+            
+            if(!user || !newPass) return alert("账号或密码不能为空");
 
             try {
-                // 1. 查找匹配的云端卡片（优先UID，其次索引）
-                const target = cloudCards.find(c => c.uid === data.uid) || cloudCards[data.idx];
-                const drugName = data.drug || (target ? target.drug : "未知药物");
-
-                // 2. 存入历史日志 med_logs
-                console.log("正在存入 med_logs...");
-                await window.cloud.invoke("db-proxy", {
-                    action: "add",
-                    collection: "med_logs",
-                    data: {
-                        drug: drugName,
-                        owner: currentUserName,
-                        time: new Date().toLocaleString(),
-                        cardIdx: data.idx
-                    }
+                // 1. 先查找用户
+                const res = await window.cloud.invoke("db-proxy", { 
+                    action: "get", 
+                    collection: "users", 
+                    query: { username: user } 
                 });
 
-                // 3. 更新该计划的“今日已服”状态 lastDate
-                if(target) {
-                    console.log("正在更新计划 lastDate...");
+                if(res.data && res.data.length > 0) {
+                    const userId = res.data[0]._id;
+                    // 2. 更新密码
                     await window.cloud.invoke("db-proxy", {
                         action: "update",
-                        collection: "pill_plans",
-                        id: target._id,
-                        data: { lastDate: new Date().toLocaleDateString() }
+                        collection: "users",
+                        id: userId,
+                        data: { password: newPass }
                     });
+                    alert("密码重置成功！请重新登录");
+                    showView('loginView');
+                } else {
+                    alert("该用户名不存在");
                 }
-
-                console.log("✅ 全链路记录成功！");
-                // 4. 实时刷新列表，让 UI 反馈“已服”
-                fetchCards();
-                
-                // 如果当前正停留在日志页，自动刷新日志
-                if(document.getElementById('historyView').classList.contains('active')) {
-                    fetchHistory();
-                }
-
             } catch(e) {
-                console.error("❌ 处理服药上报出错:", e);
+                alert("重置操作失败，请检查网络");
             }
-        }
+        };
 
-        // 基础功能函数
+        // 注册功能 (已加非空校验)
         async function handleRegister() {
             const user = document.getElementById('regUser').value;
             const pass = document.getElementById('regPass').value;
-            if(!user || !pass) return alert("请填写完整");
+            if(!user || !pass) return alert("账号或密码不能为空");
             try {
                 await window.cloud.invoke("db-proxy", { action: "add", collection: "users", data: { username: user, password: pass } });
                 alert("云端账户激活成功！"); showView('loginView');
             } catch(e) { alert("注册失败"); }
         }
 
+        // 登录功能 (已加非空校验)
         async function handleLogin() {
             const user = document.getElementById('loginUser').value;
             const pass = document.getElementById('loginPass').value;
+            if(!user || !pass) return alert("账号或密码不能为空");
             const res = await window.cloud.invoke("db-proxy", { action: "get", collection: "users", query: { username: user, password: pass } });
             if(res.data && res.data.length > 0) {
                 currentUserName = user;
@@ -217,6 +216,7 @@
             } else alert("账号或密码错误");
         }
 
+        // 其余业务函数 (fetchCards, renderUI, saveAndSync 等) 保持不变...
         async function fetchCards() {
             const res = await window.cloud.invoke("db-proxy", { action: "get", collection: "pill_plans", query: { owner: currentUserName } });
             cloudCards = res.data || [];
@@ -284,44 +284,22 @@
 
         window.handleDeleteAccount = async () => {
             if(!currentUserName) return alert("状态异常");
-
-            if(!confirm("⚠️ 严格注销提示：系统将精确匹配用户名 [" + currentUserName + "] 并销毁其所有服药历史。确认？")) return;
-            
-            const verify = prompt("请输入精确的用户名 [" + currentUserName + "] 以执行强制注销：");
-            if(verify !== currentUserName) {
-                alert("输入不匹配（区分大小写），注销已取消。");
-                return;
-            }
-
+            if(!confirm("⚠️ 严格注销提示：系统将销毁所有数据。确认？")) return;
+            const verify = prompt("请输入精确的用户名 [" + currentUserName + "] 以确认：");
+            if(verify !== currentUserName) return alert("输入不匹配");
             try {
-                const res = await window.cloud.invoke("db-proxy", { 
-                    action: "delete_user_all", 
-                    query: { username: currentUserName } 
-                });
-
-                if(res.status === 'success') {
-                    const d = res.details;
-                    // 反馈删除的具体数量
-                    alert(`注销成功！\n共深度清理历史记录: ${d.logs} 条\n清理配置计划: ${d.plans} 个。`);
-                    location.reload();
-                } else {
-                    alert("注销失败: " + res.message);
-                }
-            } catch(e) {
-                alert("网络超时，请检查 Laf 云函数运行日志");
-            }
+                const res = await window.cloud.invoke("db-proxy", { action: "delete_user_all", query: { username: currentUserName } });
+                if(res.status === 'success') { alert("注销成功！数据已销毁"); location.reload(); }
+            } catch(e) { alert("网络超时"); }
         }
 
         window.showView = (id) => {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(id).classList.add('active');
-            document.getElementById('navBar').style.display = ['loginView', 'regView'].includes(id) ? 'none' : 'flex';
-            
-            // 切换导航高亮
+            document.getElementById('navBar').style.display = ['loginView', 'regView', 'forgotView'].includes(id) ? 'none' : 'flex';
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
             const map = {bindView:0, medView:1, historyView:2, userView:3};
             if(map[id] !== undefined) document.querySelectorAll('.nav-item')[map[id]].classList.add('active');
-            
             if(id === 'historyView') fetchHistory();
         }
 
@@ -350,11 +328,25 @@
             showView('configSubView');
         }
 
+        // 处理器封装...
+        async function handleMedReport(data) {
+            if(!currentUserName) return;
+            try {
+                const target = cloudCards.find(c => c.uid === data.uid) || cloudCards[data.idx];
+                const drugName = data.drug || (target ? target.drug : "未知药物");
+                await window.cloud.invoke("db-proxy", { action: "add", collection: "med_logs", data: { drug: drugName, owner: currentUserName, time: new Date().toLocaleString(), cardIdx: data.idx } });
+                if(target) {
+                    await window.cloud.invoke("db-proxy", { action: "update", collection: "pill_plans", id: target._id, data: { lastDate: new Date().toLocaleDateString() } });
+                }
+                fetchCards();
+            } catch(e) { console.error(e); }
+        }
+
         // 暴露函数
         window.handleRegister = handleRegister;
         window.handleLogin = handleLogin;
         window.deleteCard = deleteCard;
-        console.log("🚀 System V2.1 Ready");
+        console.log("🚀 System V2.2 Ready with Password Reset");
     </script>
 </body>
 </html>
